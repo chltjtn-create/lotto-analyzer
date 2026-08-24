@@ -968,11 +968,23 @@ elif page == "🧪 백테스트":
         if len(draws) < int(bt_rounds) + 10:
             st.warning(f"데이터 부족: {len(draws)}회차 (요청 {bt_rounds}회차)")
         else:
+            from analysis.backtest import BacktestError
             from generator.combination import CombinationConstraints
             constraints = CombinationConstraints(sum_min=bt_sum_min, sum_max=bt_sum_max)
+            bt_end = latest.draw_no
+            bt_start = draws[-int(bt_rounds)].draw_no
             with st.spinner("백테스트 실행 중..."):
-                result = run_backtest(draws, scores, strategy=bt_strategy,
-                                      rounds=int(bt_rounds), constraints=constraints)
+                try:
+                    result = run_backtest(
+                        draws,
+                        start_draw_no=bt_start,
+                        end_draw_no=bt_end,
+                        strategy=bt_strategy,
+                        constraints=constraints,
+                    )
+                except BacktestError as e:
+                    st.error(f"백테스트 실패: {e}")
+                    st.stop()
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.metric("테스트 회차", f"{result.total_rounds}회")
             with c2: st.metric("3개 이상 적중", f"{result.match_3_count + result.match_4_count + result.match_5_count + result.match_6_count}회")
@@ -1120,16 +1132,14 @@ elif page == "🔄 데이터 업데이트":
         draw_from = st.number_input("시작 회차", 1, latest.draw_no + 50, latest.draw_no + 1, key="fetch_from")
         draw_to   = st.number_input("종료 회차", 1, latest.draw_no + 50, latest.draw_no + 5, key="fetch_to")
         if st.button("⬇️ 데이터 수집", use_container_width=True):
-            from crawler.dhlottery import fetch_draws
+            from collector.crawler import LottoCrawler, LottoCrawlerError
             with st.spinner("수집 중..."):
-                bar = st.progress(0)
-                fetched = []
-                total_range = int(draw_to) - int(draw_from) + 1
-                for i, no in enumerate(range(int(draw_from), int(draw_to) + 1)):
-                    draw = fetch_draws(no)
-                    if draw:
-                        fetched.append(draw)
-                    bar.progress((i + 1) / total_range)
+                try:
+                    crawler = LottoCrawler()
+                    fetched = crawler.fetch_range(int(draw_from), int(draw_to), skip_missing=True)
+                except LottoCrawlerError as e:
+                    st.error(f"수집 실패: {e}")
+                    fetched = []
             if fetched:
                 db = LottoDatabaseManager()
                 db.initialize_database()
@@ -1151,13 +1161,20 @@ elif page == "🔄 데이터 업데이트":
         </div>""", unsafe_allow_html=True)
         excel_path = st.text_input("엑셀 파일 경로", placeholder="D:/Downloads/lotto.xlsx", key="xls_path")
         if st.button("📥 엑셀 가져오기", use_container_width=True):
-            from crawler.excel_importer import import_from_excel
+            from collector.local_loader import LocalDataLoadError, load_draws_from_excel
             with st.spinner("가져오는 중..."):
-                result = import_from_excel(excel_path)
-            st.success(f"{result}개 회차 가져오기 완료!")
-            _load_raw.clear()
-            _load_analysis.clear()
-            st.rerun()
+                try:
+                    imported = load_draws_from_excel(excel_path)
+                    db = LottoDatabaseManager()
+                    db.initialize_database()
+                    for d in imported:
+                        db.save_draw(d)
+                    st.success(f"{len(imported)}개 회차 가져오기 완료!")
+                    _load_raw.clear()
+                    _load_analysis.clear()
+                    st.rerun()
+                except LocalDataLoadError as e:
+                    st.error(f"가져오기 실패: {e}")
 
     with tab_weekly:
         st.markdown("""
@@ -1169,10 +1186,16 @@ elif page == "🔄 데이터 업데이트":
         wk_count  = st.number_input("추천 수", 1, 20, 5, key="wk_cnt")
         wk_strat  = st.selectbox("전략", ["Hybrid", "Hot", "Balanced", "Cold"], key="wk_strat")
         if st.button("🔁 주간 업데이트 실행", use_container_width=True):
-            from automation.weekly_runner import run_weekly
+            from automation.weekly_update import run_weekly_update
             with st.spinner("주간 업데이트 실행 중..."):
-                run_weekly(recommendation_count=int(wk_count), strategy=wk_strat)
-            st.success("주간 업데이트 완료!")
+                result = run_weekly_update(recommendation_count=int(wk_count), strategy=wk_strat)
+            if result.errors:
+                st.error("주간 업데이트 중 오류 발생: " + "; ".join(result.errors))
+            else:
+                st.success(
+                    f"주간 업데이트 완료! 신규 회차 {len(result.fetched_draws)}개, "
+                    f"추천 {result.generated_recommendations}개 생성"
+                )
             _load_raw.clear()
             _load_analysis.clear()
             st.rerun()
