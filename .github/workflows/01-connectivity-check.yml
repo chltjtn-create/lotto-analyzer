@@ -1,0 +1,76 @@
+# 가장 먼저 돌려볼 테스트입니다.
+# 동행복권 사이트가 GitHub의 해외 서버 접속을 허용하는지 확인합니다.
+# 이게 실패하면 주간 자동화를 클라우드로 옮길 수 없으므로, 반드시 이것부터 실행하세요.
+#
+# 실행 방법: GitHub 저장소 -> Actions 탭 -> "1. 동행복권 접속 테스트" -> Run workflow
+
+name: "1. 동행복권 접속 테스트"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+        with:
+          path: lotto_analyzer
+
+      - name: 파이썬 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 동행복권 API 접속 시도
+        run: |
+          python - <<'PY'
+          import json, sys, time
+          from urllib.request import Request, urlopen
+          from urllib.error import URLError, HTTPError
+
+          URL = "https://www.dhlottery.co.kr/lt645/selectPstLt645Info.do?srchLtEpsd=1235"
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              "Accept": "application/json, text/plain, */*",
+          }
+
+          started = time.time()
+          try:
+              req = Request(URL, headers=HEADERS)
+              with urlopen(req, timeout=30) as res:
+                  body = res.read().decode("utf-8", "replace")
+              elapsed = time.time() - started
+              print(f"HTTP 200 OK  ({elapsed:.1f}초)")
+              print("응답 앞부분:", body[:300])
+              try:
+                  data = json.loads(body)
+                  print("JSON 파싱 성공. 키:", list(data)[:10])
+                  print("\n=== 결과: 접속 가능. 클라우드 이전 진행해도 됩니다. ===")
+              except json.JSONDecodeError:
+                  print("\n=== 결과: 응답은 왔지만 JSON이 아닙니다. 차단 페이지일 수 있습니다. ===")
+                  sys.exit(1)
+          except HTTPError as exc:
+              print(f"HTTP 오류 {exc.code}: {exc.reason}")
+              print("\n=== 결과: 차단되었습니다. 대안이 필요합니다. ===")
+              sys.exit(1)
+          except URLError as exc:
+              print(f"접속 실패: {exc.reason}")
+              print(f"경과 {time.time() - started:.1f}초")
+              print("\n=== 결과: 해외 IP가 차단된 것으로 보입니다. 대안이 필요합니다. ===")
+              sys.exit(1)
+          PY
+
+      - name: 결과 페이지도 시도 (API가 막힌 경우 대비)
+        if: failure()
+        run: |
+          python - <<'PY'
+          from urllib.request import Request, urlopen
+          URL = "https://www.dhlottery.co.kr/gameResult.do?method=byWin&drwNo=1235"
+          try:
+              with urlopen(Request(URL, headers={"User-Agent": "Mozilla/5.0"}), timeout=30) as res:
+                  print("HTML 페이지는 접속 가능:", res.status, len(res.read()), "bytes")
+          except Exception as exc:
+              print("HTML 페이지도 실패:", exc)
+          PY

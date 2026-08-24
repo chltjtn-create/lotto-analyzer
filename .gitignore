@@ -1,0 +1,29 @@
+# --- 절대 커밋하면 안 되는 것 ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+.streamlit/secrets.toml
+
+# --- 파이썬 ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# --- 로그 (클라우드에서는 artifact로 확인) ---
+logs/*.log
+logs/*.json
+logs/.last_run_date
+logs/.python_path
+
+# --- 백업 폴더 ---
+backup_*/
+
+# 참고: data/*.db, data/*.csv, data/*.json 은 일부러 제외하지 않습니다.
+# GitHub Actions는 실행할 때마다 초기화되므로, 회차 데이터를 저장소에 커밋해야
+# 다음 주 실행에서 이어서 쓸 수 있습니다. 리포트 PNG/XLSX도 같은 이유로 포함합니다.

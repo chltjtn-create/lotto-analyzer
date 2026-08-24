@@ -1,0 +1,110 @@
+# 매주 월요일 오전 9시(한국 시간)에 자동 실행됩니다.
+# PC가 켜져 있든 꺼져 있든 상관없이 GitHub 서버에서 돌아갑니다.
+#
+# 하는 일:
+#   최신 회차 수집 -> 지난 추천 평가 -> 다음 회차 추천 -> 차트/엑셀 생성 -> 메일 발송
+#   -> 갱신된 데이터를 저장소에 자동 커밋 (다음 주 실행에서 이어서 사용)
+#
+# 필요한 Secrets (저장소 Settings -> Secrets and variables -> Actions):
+#   LOTTO_SMTP_USERNAME   보내는 Gmail 주소
+#   LOTTO_SMTP_PASSWORD   Gmail 앱 비밀번호 (일반 비밀번호 아님)
+#   LOTTO_EMAIL_TO        받는 주소 (여러 명이면 쉼표로 구분)
+
+name: "2. 주간 자동 분석"
+
+on:
+  schedule:
+    # GitHub는 UTC 기준입니다. 월요일 00:00 UTC = 월요일 09:00 한국시간
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      send_email:
+        description: "메일 발송 여부"
+        type: boolean
+        default: true
+
+# 데이터 커밋을 위해 쓰기 권한이 필요합니다.
+permissions:
+  contents: write
+
+# 이전 실행이 안 끝났으면 중복 실행하지 않습니다.
+concurrency:
+  group: weekly-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+        with:
+          path: lotto_analyzer
+
+      - name: 파이썬 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: lotto_analyzer/requirements.txt
+
+      - name: 한글 폰트 설치
+        # 이게 없으면 차트의 한글이 네모(□)로 깨집니다.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-nanum
+          sudo fc-cache -fv > /dev/null
+          rm -rf ~/.cache/matplotlib
+
+      - name: 패키지 설치
+        run: pip install -r lotto_analyzer/requirements.txt
+
+      - name: 주간 분석 실행
+        env:
+          LOTTO_EMAIL_ENABLED: "true"
+          LOTTO_SMTP_HOST: smtp.gmail.com
+          LOTTO_SMTP_PORT: "587"
+          LOTTO_SMTP_USE_TLS: "true"
+          LOTTO_SMTP_USERNAME: ${{ secrets.LOTTO_SMTP_USERNAME }}
+          LOTTO_SMTP_PASSWORD: ${{ secrets.LOTTO_SMTP_PASSWORD }}
+          LOTTO_EMAIL_FROM: ${{ secrets.LOTTO_SMTP_USERNAME }}
+          LOTTO_EMAIL_TO: ${{ secrets.LOTTO_EMAIL_TO }}
+          LOTTO_RECOMMENDATION_COUNT: "5"
+          LOTTO_RECOMMENDATION_STRATEGY: Hybrid
+          PYTHONUTF8: "1"
+        run: |
+          if [ "${{ github.event.inputs.send_email }}" = "false" ]; then
+            python -u -m lotto_analyzer.automation.run_weekly_update --no-email
+          else
+            python -u -m lotto_analyzer.automation.run_weekly_update
+          fi
+
+      - name: 갱신된 데이터 커밋
+        # 실행이 실패해도 수집된 데이터는 저장합니다.
+        if: always()
+        working-directory: lotto_analyzer
+        run: |
+          git config user.name  "lotto-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ report/output/ lotto_report.xlsx 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "변경된 데이터가 없습니다."
+          else
+            git commit -m "chore: 주간 데이터 갱신 $(date -u +'%Y-%m-%d')"
+            git push
+            echo "데이터 커밋 완료"
+          fi
+
+      - name: 로그 보관
+        # 실패했을 때 원인을 볼 수 있도록 단계별 로그를 남깁니다. 30일간 보관.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_number }}
+          path: |
+            lotto_analyzer/logs/weekly_run_*.log
+            lotto_analyzer/logs/weekly_update_*.json
+          retention-days: 30
+          if-no-files-found: ignore

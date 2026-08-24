@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m lotto_analyzer.main collect-draw 1229)",
+      "Read(//d/GoogleDrive/**)",
+      "Bash(python -m lotto_analyzer.main add-draw 1230 2026-06-27 3 8 9 22 28 42 45)",
+      "Bash(python -m lotto_analyzer.main recommend --count 5 --strategy Hybrid)"
+    ]
+  }
+}
