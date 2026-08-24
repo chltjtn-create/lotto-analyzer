@@ -9,6 +9,18 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# 내부 모듈들은 "from lotto_analyzer.xxx import yyy" 형태로 서로를 import한다.
+# 로컬에서는 D:\GoogleDrive(부모 폴더)가 항상 실행 경로라 이 폴더 자체가
+# lotto_analyzer 패키지로 자연히 인식되지만, Streamlit Cloud는 저장소를
+# lotto-analyzer(GitHub repo 이름, 하이픈)로 클론하므로 그 이름의 패키지가
+# 없어서 깨진다. 저장소 루트를 lotto_analyzer 패키지로 별칭 등록해 해결한다.
+if "lotto_analyzer" not in sys.modules:
+    import types
+
+    _alias = types.ModuleType("lotto_analyzer")
+    _alias.__path__ = [str(ROOT)]
+    sys.modules["lotto_analyzer"] = _alias
+
 import streamlit as st
 
 st.set_page_config(
