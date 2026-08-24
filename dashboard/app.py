@@ -57,28 +57,49 @@ st.markdown("""
 /* ── Base ── */
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stAppViewContainer"] { background: var(--bg); }
-[data-testid="block-container"] { padding: 1.5rem 2.5rem 3rem; }
+[data-testid="block-container"] {
+    padding: 1.5rem 2.5rem 3rem;
+    max-width: 1180px;
+    margin: 0 auto;
+}
 html { font-size: 17px; }
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: var(--text); word-break: keep-all; overflow-wrap: break-word; }
 h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
 
-/* ── Sidebar (always expanded, non-collapsible) ── */
+/* Phone: tighter gutters, and never let a wide element scroll the page sideways. */
+@media (max-width: 768px) {
+    html { font-size: 15px; }
+    [data-testid="block-container"] { padding: 1rem 0.9rem 2.5rem; }
+    [data-testid="stAppViewContainer"] { overflow-x: hidden; }
+}
+
+/* ── Sidebar ── */
 [data-testid="stSidebar"] {
     background: #0a0c10 !important;
     border-right: 1px solid var(--border) !important;
-    transform: none !important;
-    visibility: visible !important;
-    width: 300px !important;
-    min-width: 300px !important;
-    max-width: 300px !important;
 }
-[data-testid="stSidebar"] > div {
-    width: 300px !important;
-    min-width: 300px !important;
+
+/* Desktop/tablet: pin the sidebar open and hide the collapse toggle. */
+@media (min-width: 769px) {
+    [data-testid="stSidebar"] {
+        transform: none !important;
+        visibility: visible !important;
+        width: 300px !important;
+        min-width: 300px !important;
+        max-width: 300px !important;
+    }
+    [data-testid="stSidebar"] > div {
+        width: 300px !important;
+        min-width: 300px !important;
+    }
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stExpandSidebarButton"] { display: none !important; }
 }
-[data-testid="collapsedControl"] { display: none !important; }
-[data-testid="stSidebarCollapseButton"] { display: none !important; }
-[data-testid="stExpandSidebarButton"] { display: none !important; }
+
+/* Mobile: leave the sidebar's width and collapse toggle to Streamlit. It slides
+   the panel by its own inline width, so overriding the width here would leave a
+   strip of it covering the page when collapsed. */
 [data-testid="stSidebar"] * { color: var(--text) !important; }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
     font-size: 0.75rem;
@@ -215,15 +236,34 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
 .kpi-delta-neu { color: var(--muted);   font-size: 0.78rem; font-weight: 600; margin-top: 2px; }
 
 /* ── Lotto Balls ── */
-.balls-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
+/* Default: long lists (hot/warm/cold, missing numbers) wrap onto more lines. */
+.balls-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: clamp(5px, 1.4vw, 10px);
+    flex-wrap: wrap;
+    padding: 6px 0;
+    width: 100%;
+}
+/* `spread` is for a single draw (6 balls + optional bonus): the row is spread
+   evenly across the card and never wraps — balls shrink to fit a phone screen
+   instead of breaking onto a second line. */
+.balls-row.spread {
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+    gap: clamp(4px, 1vw, 10px);
+}
+.balls-row.spread .ball { flex: 0 1 var(--bs, 48px); min-width: 0; }
 .ball {
-    width: 48px; height: 48px;
+    flex: 0 0 var(--bs, 48px);
+    aspect-ratio: 1 / 1;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 1rem;
+    font-size: clamp(0.72rem, 2.6vw, 1rem);
     font-weight: 700;
     color: #fff;
     text-shadow: 0 1px 3px rgba(0,0,0,0.7);
@@ -231,6 +271,12 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     cursor: default;
     transition: transform .2s ease, filter .2s ease;
     animation: ballPop .45s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.ball-plus {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: clamp(0.85rem, 2.4vw, 1.2rem);
+    line-height: 1;
 }
 .ball::after {
     content: '';
@@ -361,14 +407,20 @@ def _bz(n: int) -> str:
     if n <= 40:  return "b31"
     return "b41"
 
-def balls_html(nums, bonus=None, size=48) -> str:
-    """Render lotto balls as HTML string."""
-    s = f'<div class="balls-row" style="--bs:{size}px">'
+def balls_html(nums, bonus=None, size=48, spread=False) -> str:
+    """Render lotto balls as HTML string.
+
+    `size` is the ideal ball diameter. Long lists wrap onto several lines by
+    default; `spread=True` (for a single 6-ball draw) instead spreads them
+    evenly across the full width on one line, shrinking them to fit on a phone.
+    """
+    cls = "balls-row spread" if spread else "balls-row"
+    s = f'<div class="{cls}" style="--bs:{size}px">'
     for n in nums:
-        s += f'<div class="ball {_bz(n)}" style="width:{size}px;height:{size}px">{n}</div>'
+        s += f'<div class="ball {_bz(n)}">{n}</div>'
     if bonus is not None:
-        s += f'<span style="color:var(--muted);font-size:1.2rem;line-height:{size}px">+</span>'
-        s += f'<div class="ball bonus" style="width:{size}px;height:{size}px">{bonus}</div>'
+        s += '<span class="ball-plus">+</span>'
+        s += f'<div class="ball bonus">{bonus}</div>'
     s += '</div>'
     return s
 
@@ -486,7 +538,7 @@ if page == "🏠 홈":
             <div style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--muted);margin-bottom:10px">
                 제 {latest.draw_no}회 · {latest.draw_date}
             </div>
-            {balls_html(sorted(latest.numbers), latest.bonus, size=52)}
+            {balls_html(sorted(latest.numbers), latest.bonus, size=52, spread=True)}
         </div>
         """, unsafe_allow_html=True)
 
@@ -923,7 +975,7 @@ elif page == "🎰 조합 생성":
                                 font-family:'JetBrains Mono',monospace">
                         #{i} · {combo.strategy} · 점수 {combo.score:.1f}
                     </div>
-                    {balls_html(combo.numbers, size=46)}
+                    {balls_html(combo.numbers, size=46, spread=True)}
                     <div class="combo-meta">
                         홀짝 {combo.odd_even} · 고저 {combo.high_low} · 합계 {combo.total_sum}
                         <span class="badge-hot" style="margin-left:6px">🔥 {combo.hot_count}</span>
@@ -1058,7 +1110,7 @@ elif page == "📋 추천 이력":
                     </div>
                     {result_html}
                 </div>
-                {balls_html(c.numbers, size=42)}
+                {balls_html(c.numbers, size=42, spread=True)}
                 <div class="combo-meta">
                     {c.strategy} · 홀짝 {c.odd_even} · 고저 {c.high_low} · 합계 {c.total_sum}
                 </div>
