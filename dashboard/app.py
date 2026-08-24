@@ -846,7 +846,11 @@ elif page == "🔍 패턴 분석":
 # 🎰 조합 생성
 # ════════════════════════════════════════════════════════════════════════════
 elif page == "🎰 조합 생성":
-    from generator.combination import CombinationGenerator, CombinationConstraints
+    from generator.combination import (
+        CombinationConstraints,
+        CombinationGenerationError,
+        generate_combinations,
+    )
 
     st.markdown('<div class="sec">🎰 번호 조합 생성</div>', unsafe_allow_html=True)
 
@@ -871,17 +875,36 @@ elif page == "🎰 조합 생성":
             exclude_latest_draw_numbers=exclude_latest,
         )
         with st.spinner("조합 생성 중..."):
-            gen = CombinationGenerator(draws, scores)
-            combos = gen.generate(count=int(count), strategy=strategy, constraints=constraints)
+            try:
+                combos = generate_combinations(
+                    scores_by_number=scores,
+                    latest_draw=latest,
+                    constraints=constraints,
+                    strategy=strategy,
+                    count=int(count),
+                )
+            except CombinationGenerationError:
+                combos = []
 
         if not combos:
             st.error("조건에 맞는 조합을 생성하지 못했습니다. 조건을 완화해보세요.")
         else:
             if save:
                 try:
+                    from analysis.evaluation import RecommendationRecord
+
                     db = LottoDatabaseManager()
-                    for combo in combos:
-                        db.save_recommendation(combo, target_draw_no=latest.draw_no + 1)
+                    target_draw_no = latest.draw_no + 1
+                    strategy_key = strategy.lower().replace(" ", "_")
+                    today = date.today()
+                    for index, combo in enumerate(combos, start=1):
+                        record = RecommendationRecord(
+                            recommendation_id=f"{target_draw_no}-{strategy_key}-{index:03d}",
+                            target_draw_no=target_draw_no,
+                            created_date=today,
+                            combination=combo,
+                        )
+                        db.save_recommendation(record)
                     _load_raw.clear()
                     st.success(f"{len(combos)}개 조합이 추천 이력에 저장됐습니다.")
                 except Exception as e:
