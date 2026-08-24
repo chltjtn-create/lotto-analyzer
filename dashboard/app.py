@@ -68,11 +68,17 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     border-right: 1px solid var(--border) !important;
     transform: none !important;
     visibility: visible !important;
+    width: 300px !important;
+    min-width: 300px !important;
+    max-width: 300px !important;
 }
-[data-testid="stSidebar"][aria-expanded="false"] {
-    margin-left: 0 !important;
+[data-testid="stSidebar"] > div {
+    width: 300px !important;
+    min-width: 300px !important;
 }
 [data-testid="collapsedControl"] { display: none !important; }
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+[data-testid="stExpandSidebarButton"] { display: none !important; }
 [data-testid="stSidebar"] * { color: var(--text) !important; }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
     font-size: 0.75rem;
