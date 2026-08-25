@@ -82,7 +82,7 @@ python -m streamlit run dashboard/app.py
 
 ## 주간 자동 실행
 
-매주 월요일 09:00(한국시간)에 GitHub Actions가 다음 흐름을 수행합니다.
+매주 월요일 07:00(한국시간)에 GitHub Actions가 다음 흐름을 수행합니다.
 PC 전원과 무관하게 GitHub 서버에서 실행됩니다.
 
 ```text
