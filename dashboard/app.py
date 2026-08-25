@@ -978,7 +978,12 @@ elif page == "🎰 조합 생성":
                 help="지정한 번호는 어떤 게임에도 들어가지 않습니다.",
             )
 
-        save = st.checkbox("추천 이력 저장", value=True, key="save_rec")
+        # 기본 꺼짐: 켜면 해당 회차의 기존 추천을 덮어쓰고, 웹에서는 앱이
+        # 재시작되면 사라진다. 뽑아본 번호는 아래 "번호만 보기"로 남기면 된다.
+        save = st.checkbox(
+            "추천 이력에 저장", value=False, key="save_rec",
+            help="켜면 해당 회차의 기존 추천을 덮어씁니다. 웹에서는 앱 재시작 시 사라집니다.",
+        )
         submitted = st.form_submit_button("✨ 조합 생성", use_container_width=True)
 
     if submitted:
