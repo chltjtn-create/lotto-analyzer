@@ -68,9 +68,22 @@ python -m lotto_analyzer.main export-report
 python -m unittest discover -s lotto_analyzer/tests
 ```
 
+## 웹 대시보드
+
+분석 결과는 웹에서 확인합니다.
+
+<https://lotto007.streamlit.app>
+
+로컬에서 띄우려면:
+
+```powershell
+python -m streamlit run dashboard/app.py
+```
+
 ## 주간 자동 실행
 
-월요일에 컴퓨터가 켜지거나 작업 스케줄러가 실행되면 다음 흐름을 수행합니다.
+매주 월요일 09:00(한국시간)에 GitHub Actions가 다음 흐름을 수행합니다.
+PC 전원과 무관하게 GitHub 서버에서 실행됩니다.
 
 ```text
 최신 회차 확인
@@ -79,30 +92,17 @@ python -m unittest discover -s lotto_analyzer/tests
 -> 기존 추천 조합 평가
 -> 다음 회차 추천 조합 생성
 -> 엑셀 리포트 생성
--> 메일 발송
+-> 갱신된 데이터를 저장소에 커밋
 ```
 
-먼저 `.env.example`을 `.env`로 복사하고 메일 설정을 입력합니다.
+수동 실행은 GitHub 저장소의 Actions 탭에서 "2. 주간 자동 분석" 워크플로우를
+선택하고 **Run workflow**를 누릅니다. 별도 Secret 설정은 필요 없습니다.
 
-```powershell
-copy D:\GoogleDrive\lotto_analyzer\.env.example D:\GoogleDrive\lotto_analyzer\.env
-```
-
-Gmail을 쓰는 경우 일반 비밀번호가 아니라 앱 비밀번호를 사용합니다.
-
-수동 테스트:
+로컬에서 직접 실행할 수도 있습니다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\GoogleDrive\lotto_analyzer\scripts\run_weekly_update.ps1 -Force
 ```
-
-Windows 작업 스케줄러 등록:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\GoogleDrive\lotto_analyzer\scripts\register_weekly_task.ps1
-```
-
-메일 설정이 없거나 `LOTTO_EMAIL_ENABLED=false`이면 메일은 건너뛰고 로그와 리포트만 생성합니다.
 
 ## 고지
 

@@ -29,7 +29,7 @@ Register-ScheduledTask `
     -Action $Action `
     -Trigger @($WeeklyTrigger, $StartupTrigger) `
     -Settings $Settings `
-    -Description "Update Lotto DB, analyze results, generate report, and send email every Monday (catches up on the next boot if the PC was off)." `
+    -Description "Update Lotto DB, analyze results, and generate report every Monday (catches up on the next boot if the PC was off)." `
     -Force | Out-Null
 
 Write-Host "Registered scheduled task: $TaskName"

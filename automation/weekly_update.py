@@ -19,21 +19,18 @@ from lotto_analyzer.collector.crawler import estimate_latest_draw_no
 from lotto_analyzer.config import BASE_DIR, LOG_DIR, ensure_project_directories
 from lotto_analyzer.database import LottoDatabaseManager
 from lotto_analyzer.generator import CombinationConstraints, GeneratedCombination, generate_combinations
-from lotto_analyzer.report import ChartExportError, build_weekly_email_html, export_all_charts, export_excel_report
-
-from lotto_analyzer.automation.email_sender import EmailConfigError, EmailSettings, send_email_report
+from lotto_analyzer.report import ChartExportError, export_all_charts, export_excel_report
 
 DISCLAIMER = "본 결과는 통계 분석 기반 참고자료이며\n당첨을 보장하지 않습니다."
 
 # Per-step wall-clock limits (seconds). A step that exceeds its limit is abandoned
-# so the run can still finish, write its log, and report the problem by email.
+# so the run can still finish and record the problem in its log.
 STEP_TIMEOUTS = {
     "collect": 300,
     "backup": 120,
     "analyze": 180,
     "charts": 180,
     "excel": 300,
-    "email": 180,
 }
 
 
@@ -70,7 +67,7 @@ def _run_step(logger: RunLogger, name: str, func, timeout: float | None = None):
     """Run one workflow step with logging and a wall-clock limit.
 
     The worker runs in a daemon thread so a hung third-party call (matplotlib font
-    scan, SMTP socket, synced-folder write) cannot pin the whole run forever.
+    scan, network fetch, synced-folder write) cannot pin the whole run forever.
     """
     limit = timeout if timeout is not None else STEP_TIMEOUTS.get(name)
     logger.write(f"STEP START {name} (timeout={limit}s)")
@@ -114,10 +111,8 @@ class WeeklyUpdateResult:
     chart_paths: list[Path] = field(default_factory=list)
     csv_path: Path | None = None
     json_path: Path | None = None
-    email_sent: bool = False
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
-    html_body: str | None = None
     step_log_path: Path | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -134,7 +129,6 @@ class WeeklyUpdateResult:
             "chart_paths": [str(path) for path in self.chart_paths],
             "csv_path": str(self.csv_path) if self.csv_path else None,
             "json_path": str(self.json_path) if self.json_path else None,
-            "email_sent": self.email_sent,
             "step_log_path": str(self.step_log_path) if self.step_log_path else None,
             "warnings": self.warnings,
             "errors": self.errors,
@@ -144,9 +138,8 @@ class WeeklyUpdateResult:
 def run_weekly_update(
     recommendation_count: int | None = None,
     strategy: str | None = None,
-    send_mail: bool = True,
 ) -> WeeklyUpdateResult:
-    """Run collection, backup, analysis, recommendation, report, and email workflow."""
+    """Run collection, backup, analysis, recommendation, and report workflow."""
     load_dotenv(BASE_DIR / ".env")
     ensure_project_directories()
 
@@ -199,7 +192,7 @@ def run_weekly_update(
         )
 
         # Charts and the Excel report are presentation only. A failure here must not
-        # cost us the run log or the email, so each is isolated.
+        # cost us the run log, so each is isolated.
         try:
             result.chart_paths = _run_step(logger, "charts", lambda: export_all_charts(stats, scores, patterns))
         except (ChartExportError, StepTimeoutError, Exception) as exc:
@@ -221,30 +214,10 @@ def run_weekly_update(
         except Exception as exc:  # noqa: BLE001 - report is optional, run must finish
             result.warnings.append(f"Excel report skipped: {type(exc).__name__}: {exc}")
 
-        latest_draw = draws[-1]
-        latest_evaluations = [
-            evaluation
-            for evaluation in database.list_evaluations()
-            if evaluation.target_draw_no == latest_draw.draw_no
-        ]
-        result.html_body = build_weekly_email_html(
-            latest_draw=latest_draw,
-            evaluations=latest_evaluations,
-            next_target_draw_no=latest_draw.draw_no + 1,
-            next_recommendations=generated_records,
-        )
-
-        if send_mail:
-            _run_step(logger, "email", lambda: _send_weekly_email(result))
     except Exception as exc:
         logger.write(f"RUN ERROR {type(exc).__name__}: {exc}")
         result.errors.append(f"{type(exc).__name__}: {exc}")
         result.errors.append(traceback.format_exc())
-        try:
-            if send_mail:
-                _run_step(logger, "email", lambda: _send_weekly_email(result))
-        except Exception as mail_exc:
-            result.warnings.append(f"Failure email skipped: {mail_exc}")
     finally:
         result.finished_at = datetime.now()
         log_path = _write_run_log(result)
@@ -343,51 +316,6 @@ def _generate_next_recommendations(
     ]
     database.save_recommendations(records)
     return records
-
-
-def _send_weekly_email(result: WeeklyUpdateResult) -> None:
-    """Send a weekly summary email when SMTP settings are configured."""
-    settings = EmailSettings.from_environment()
-    if not settings.enabled:
-        result.warnings.append("Email delivery skipped because LOTTO_EMAIL_ENABLED is false.")
-        return
-
-    subject = _email_subject(result)
-    body = _email_body(result)
-    attachments = [path for path in [result.report_path, result.csv_path, result.json_path] if path]
-    send_email_report(subject, body, attachments, settings, html_body=result.html_body)
-    result.email_sent = True
-
-
-def _email_subject(result: WeeklyUpdateResult) -> str:
-    """Build the weekly email subject."""
-    status = "성공" if not result.errors else "확인 필요"
-    latest = result.latest_after or result.latest_before or "미확인"
-    return f"[로또 자동분석] {status} - 최신 {latest}회"
-
-
-def _email_body(result: WeeklyUpdateResult) -> str:
-    """Build the weekly email body."""
-    lines = [
-        "로또 6/45 주간 자동 분석 결과입니다.",
-        "",
-        f"시작: {result.started_at.isoformat(timespec='seconds')}",
-        f"종료: {result.finished_at.isoformat(timespec='seconds') if result.finished_at else '진행 중'}",
-        f"기존 최신 회차: {result.latest_before}",
-        f"갱신 후 최신 회차: {result.latest_after}",
-        f"새로 저장한 회차: {result.fetched_draws or '없음'}",
-        f"평가한 추천 조합: {result.evaluated_recommendations}건",
-        f"새 추천 조합: {result.generated_recommendations}건",
-        f"엑셀 리포트: {result.report_path}",
-        f"단계 로그: {result.step_log_path}",
-        "",
-        DISCLAIMER,
-    ]
-    if result.warnings:
-        lines.extend(["", "주의/알림:", *[f"- {warning}" for warning in result.warnings]])
-    if result.errors:
-        lines.extend(["", "오류:", *[f"- {error}" for error in result.errors[:2]]])
-    return "\n".join(lines)
 
 
 def _write_run_log(result: WeeklyUpdateResult) -> Path:

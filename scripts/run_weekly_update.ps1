@@ -11,7 +11,7 @@
 
     This version always runs when invoked and lets the Python workflow decide
     whether a new draw exists. A once-per-day marker stops the startup trigger
-    from producing duplicate runs and duplicate emails.
+    from producing duplicate runs.
 #>
 param(
     [switch]$Force,
