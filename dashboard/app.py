@@ -328,6 +328,17 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
 }
 [data-testid="stTabs"] [aria-selected="true"] { color: var(--text) !important; border-bottom: 2px solid var(--accent) !important; }
 
+/* ── Number input ── */
+/* +/- 스테퍼를 숨겨 그냥 타이핑하는 칸으로 만든다. 게임 수를 100으로 맞추려고
+   + 를 95번 누르는 일이 없도록. */
+[data-testid="stNumberInputStepUp"],
+[data-testid="stNumberInputStepDown"] { display: none !important; }
+[data-testid="stNumberInputField"] {
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+}
+
 /* ── Dataframe ── */
 [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
 </style>
@@ -942,8 +953,10 @@ elif page == "🎰 조합 생성":
         c1, c2, c3 = st.columns(3)
         with c1:
             strategy_label = st.selectbox("전략", list(STRATEGY_LABELS), key="strat")
-            games = st.number_input("게임 수", 1, 100, 5, key="cnt",
-                                    help="1~100게임까지 한 번에 생성합니다.")
+            games = st.number_input(
+                "게임 수 (1~100)", 1, 100, 5, step=1, key="cnt",
+                help="칸을 클릭해 숫자를 직접 입력하세요. 예: 100",
+            )
         with c2:
             sum_min = st.number_input("합계 최솟값", 21, 230, 100, key="smin")
             sum_max = st.number_input("합계 최댓값", 21, 230, 180, key="smax")
