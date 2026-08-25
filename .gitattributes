@@ -1,0 +1,22 @@
+# 데이터 파일은 Windows(로컬)와 Linux(GitHub Actions) 양쪽에서 새로 쓰인다.
+# 줄바꿈을 LF로 고정하지 않으면 내용이 같아도 전체 줄이 바뀐 것으로 기록되어
+# 매주 커밋이 지저분해지고 저장소가 불필요하게 커진다.
+*.csv text eol=lf
+*.json text eol=lf
+
+# 소스와 설정도 LF로 통일한다.
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.txt   text eol=lf
+
+# PowerShell은 CRLF를 유지한다.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# 바이너리는 절대 변환하지 않는다.
+*.xlsx binary
+*.png  binary
+*.db   binary

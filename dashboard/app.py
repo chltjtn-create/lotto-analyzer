@@ -471,51 +471,79 @@ if page == "🏠 홈":
     </div>
     """, unsafe_allow_html=True)
 
-    # ── 1. 지난 회차 당첨 번호 ───────────────────────────────────────────────
-    st.markdown(f'<div class="sec">🏆 지난 {latest.draw_no}회 당첨 번호</div>', unsafe_allow_html=True)
-    st.markdown(f"""
-    <div class="card">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--muted);margin-bottom:8px">
-            {latest.draw_date}
-        </div>
-        {balls_html(sorted(latest.numbers), latest.bonus, size=42, spread=True)}
-    </div>
-    """, unsafe_allow_html=True)
+    # ── 1. 이번 주 추천 번호 (맨 위) ─────────────────────────────────────────
+    # 보통은 최신 회차 + 1이지만, 추천이 그보다 앞선 회차에 저장돼 있으면
+    # 아직 추첨되지 않은 회차 중 가장 가까운 쪽을 보여준다.
+    future_nos = sorted({r.target_draw_no for r in recommendations
+                         if r.target_draw_no > latest.draw_no})
+    if next_no not in future_nos and future_nos:
+        next_no = future_nos[0]
 
-    # ── 2. 추천 적중 결과 ────────────────────────────────────────────────────
-    # 추천이 저장된 회차와 실제 추첨이 끝난 회차가 항상 일치하지는 않는다
-    # (예: 최신 추첨은 1238회인데 추천은 1237회까지만 있는 경우). 그래서
-    # "이미 추첨이 끝났고 추천도 있는" 가장 최근 회차를 골라 채점한다.
+    next_recs = sorted(
+        [r for r in recommendations if r.target_draw_no == next_no],
+        key=lambda r: r.recommendation_id,
+    )[:5]
+
+    st.markdown(f'<div class="sec">🔮 이번 주 {next_no}회 추천 번호</div>',
+                unsafe_allow_html=True)
+
+    if not next_recs:
+        st.markdown(
+            f'<div class="card" style="color:var(--muted);font-size:.85rem">'
+            f'{next_no}회 추천 조합이 아직 없습니다. '
+            f'“🎰 조합 생성” 페이지에서 만들 수 있습니다.</div>',
+            unsafe_allow_html=True)
+    else:
+        for i, rec in enumerate(next_recs, 1):
+            c = rec.combination
+            st.markdown(f"""
+            <div class="combo">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
+                        #{i} · {c.strategy}
+                    </div>
+                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
+                        합계 {c.total_sum} · 🔥{c.hot_count} 🌡️{c.warm_count} ❄️{c.cold_count}
+                    </div>
+                </div>
+                {balls_html(c.numbers, size=34, spread=True)}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── 2. 전 회차 결과 (당첨 번호 + 그 회차 추천 적중) ──────────────────────
+    # 전 회차 하나만 보여준다. 추천이 없는 회차가 섞여 있을 수 있으므로
+    # "추첨이 끝났고 추천도 있는" 가장 최근 회차를 고르고, 없으면 최신 회차의
+    # 당첨 번호만 표시한다.
     draw_by_no = {d.draw_no: d for d in draws}
     scored_nos = sorted(
         {r.target_draw_no for r in recommendations if r.target_draw_no in draw_by_no},
         reverse=True,
     )
-    scored_no = scored_nos[0] if scored_nos else None
+    scored_no = scored_nos[0] if scored_nos else latest.draw_no
+    target_draw = draw_by_no[scored_no]
+    win_set = set(target_draw.numbers)
+    prev_recs = sorted(
+        [r for r in recommendations if r.target_draw_no == scored_no],
+        key=lambda r: r.recommendation_id,
+    )[:5]
 
-    if scored_no is None:
-        st.markdown('<div class="sec" style="margin-top:1rem">🎯 추천 적중 결과</div>',
-                    unsafe_allow_html=True)
+    st.markdown(f'<div class="sec" style="margin-top:1.3rem">🏆 전 회차 {scored_no}회 결과</div>',
+                unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="card">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:6px">
+            {target_draw.draw_date} 당첨 번호
+        </div>
+        {balls_html(sorted(target_draw.numbers), target_draw.bonus, size=40, spread=True)}
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not prev_recs:
         st.markdown(
-            '<div class="card" style="color:var(--muted);font-size:.85rem">'
-            '채점할 수 있는 추천 이력이 아직 없습니다.</div>',
+            f'<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">'
+            f'{scored_no}회를 대상으로 저장된 추천이 없습니다.</div>',
             unsafe_allow_html=True)
     else:
-        target_draw = draw_by_no[scored_no]
-        win_set = set(target_draw.numbers)
-        prev_recs = sorted(
-            [r for r in recommendations if r.target_draw_no == scored_no],
-            key=lambda r: r.recommendation_id,
-        )[:5]
-
-        st.markdown(f'<div class="sec" style="margin-top:1rem">🎯 {scored_no}회 추천 적중 결과</div>',
-                    unsafe_allow_html=True)
-        st.markdown(
-            f'<div style="font-size:.74rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;margin-bottom:8px">'
-            f'{scored_no}회 당첨번호 {" ".join(f"{n:02d}" for n in sorted(target_draw.numbers))}'
-            f' + {target_draw.bonus:02d}</div>',
-            unsafe_allow_html=True)
-
         best = 0
         for rec in prev_recs:
             c = rec.combination
@@ -546,45 +574,6 @@ if page == "🏠 홈":
             f'<div style="font-size:.76rem;color:var(--muted);margin:-2px 0 4px">'
             f'추천 {len(prev_recs)}개 중 최고 성적 <b style="color:var(--text)">{best}개 적중</b></div>',
             unsafe_allow_html=True)
-
-    # ── 3. 다음 회차 추천 번호 ───────────────────────────────────────────────
-    # 보통은 최신 회차 + 1이지만, 추천이 그보다 앞선 회차에 저장돼 있으면
-    # 아직 추첨되지 않은 회차 중 가장 가까운 쪽을 보여준다.
-    future_nos = sorted({r.target_draw_no for r in recommendations
-                         if r.target_draw_no > latest.draw_no})
-    if next_no not in future_nos and future_nos:
-        next_no = future_nos[0]
-
-    next_recs = sorted(
-        [r for r in recommendations if r.target_draw_no == next_no],
-        key=lambda r: r.recommendation_id,
-    )[:5]
-
-    st.markdown(f'<div class="sec" style="margin-top:1rem">🔮 다음 {next_no}회 추천 번호</div>',
-                unsafe_allow_html=True)
-
-    if not next_recs:
-        st.markdown(
-            f'<div class="card" style="color:var(--muted);font-size:.85rem">'
-            f'{next_no}회 추천 조합이 아직 없습니다. '
-            f'“🎰 조합 생성” 페이지에서 만들 수 있습니다.</div>',
-            unsafe_allow_html=True)
-    else:
-        for i, rec in enumerate(next_recs, 1):
-            c = rec.combination
-            st.markdown(f"""
-            <div class="combo">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
-                        #{i} · {c.strategy}
-                    </div>
-                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
-                        합계 {c.total_sum} · 🔥{c.hot_count} 🌡️{c.warm_count} ❄️{c.cold_count}
-                    </div>
-                </div>
-                {balls_html(c.numbers, size=34, spread=True)}
-            </div>
-            """, unsafe_allow_html=True)
 
     # ── 4. 핫 / 콜드 번호 (맨 아래) ──────────────────────────────────────────
     st.markdown('<div class="sec" style="margin-top:1.1rem">🌡️ 핫 · 콜드 번호</div>',
