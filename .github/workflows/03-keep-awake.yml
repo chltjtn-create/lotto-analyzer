@@ -1,0 +1,45 @@
+# Streamlit Community Cloud는 며칠 접속이 없으면 앱을 재웁니다. 잠든 뒤에는
+# 방문자가 "Yes, get this app back up!"을 눌러 40초쯤 기다려야 열립니다.
+#
+# 이 워크플로우는 대시보드 주소를 주기적으로 호출해 앱을 깨어 있게 유지합니다.
+# 페이지를 받아오기만 하고 아무것도 바꾸지 않습니다.
+#
+# 주의: 슬립 정책은 Streamlit이 정하는 것이라 100% 보장되지는 않습니다.
+#       핑이 실패해도 워크플로우는 성공으로 끝납니다(재우는 것 외에 부작용 없음).
+
+name: "3. 대시보드 깨우기"
+
+on:
+  schedule:
+    # 6시간마다 (UTC 기준 00, 06, 12, 18시). 무료 사용량을 아끼려고 넉넉히 잡았습니다.
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+# 저장소를 건드리지 않으므로 읽기 권한만 있으면 됩니다.
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-awake
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 대시보드 호출
+        env:
+          APP_URL: https://lotto007.streamlit.app
+        run: |
+          echo "ping $APP_URL"
+          # --max-time: 앱이 깨어나는 중이면 응답이 느릴 수 있어 넉넉히 둡니다.
+          # || true: 핑 실패가 워크플로우 실패로 이어지지 않게 합니다.
+          code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 90 "$APP_URL" || true)
+          echo "HTTP $code"
+          if [ "$code" = "200" ]; then
+            echo "대시보드 응답 정상"
+          else
+            echo "::warning::대시보드가 200을 반환하지 않았습니다 (HTTP $code). 앱이 깨어나는 중일 수 있습니다."
+          fi
