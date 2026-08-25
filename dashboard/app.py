@@ -58,11 +58,11 @@ st.markdown("""
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stAppViewContainer"] { background: var(--bg); }
 [data-testid="block-container"] {
-    padding: 1.5rem 2.5rem 3rem;
-    max-width: 1180px;
+    padding: 1.3rem 2rem 3rem;
+    max-width: 1040px;
     margin: 0 auto;
 }
-html { font-size: 17px; }
+html { font-size: 15.5px; }
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: var(--text); word-break: keep-all; overflow-wrap: break-word; }
 h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
 
@@ -84,13 +84,13 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     [data-testid="stSidebar"] {
         transform: none !important;
         visibility: visible !important;
-        width: 300px !important;
-        min-width: 300px !important;
-        max-width: 300px !important;
+        width: 210px !important;
+        min-width: 210px !important;
+        max-width: 210px !important;
     }
     [data-testid="stSidebar"] > div {
-        width: 300px !important;
-        min-width: 300px !important;
+        width: 210px !important;
+        min-width: 210px !important;
     }
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
@@ -107,128 +107,102 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
+/* Compact sidebar: tighter gutters and denser menu rows. */
+[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding: 0.9rem 0.7rem 1rem; }
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 1px; }
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    padding: 5px 6px;
+    border-radius: 7px;
+    transition: background .15s ease;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: rgba(255,255,255,0.04); }
+[data-testid="stSidebar"] [role="radiogroup"] label p {
+    font-size: 0.83rem !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    color: var(--text) !important;
+    white-space: nowrap;      /* keep every menu item on one line at 210px */
+}
+[data-testid="stSidebar"] [role="radiogroup"] label > div:last-child { min-width: 0; }
 
-/* ── Hero ── */
+/* ── Page header (flat, no gradient banner) ── */
 .hero {
-    background: linear-gradient(135deg, #0e1015 0%, #1a0f2e 45%, #0a1628 100%);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 2.2rem 2.5rem;
-    margin-bottom: 1.5rem;
-    position: relative;
-    overflow: hidden;
-}
-.hero::before {
-    content: '';
-    position: absolute;
-    top: -100px; right: -100px;
-    width: 350px; height: 350px;
-    background: radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%);
-    pointer-events: none;
-}
-.hero::after {
-    content: '';
-    position: absolute;
-    bottom: -80px; left: 25%;
-    width: 250px; height: 250px;
-    background: radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 65%);
-    pointer-events: none;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 0 0.9rem;
+    margin-bottom: 1.4rem;
+    border-bottom: 1px solid var(--border);
 }
 .hero-title {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 2.2rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: #fff;
-    letter-spacing: -0.03em;
-    line-height: 1.15;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
     margin: 0;
 }
 .hero-sub {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--muted);
-    margin-top: 6px;
-}
-.hero-badge {
-    display: inline-block;
-    background: rgba(124,58,237,0.2);
-    border: 1px solid rgba(124,58,237,0.4);
-    color: #c4b5fd;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 999px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 /* ── Cards ── */
 .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 1.3rem 1.6rem;
-    margin-bottom: 14px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 12px;
+    transition: border-color .18s ease;
 }
-.card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0;
-    transition: opacity .3s ease;
-}
-.card:hover { border-color: var(--border-h); box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 20px rgba(124,58,237,0.12); transform: translateY(-3px); }
-.card:hover::before { opacity: 1; }
-.card-glass {
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255,255,255,0.07);
-}
+.card:hover { border-color: var(--border-h); }
+.card-glass { background: var(--bg-card); border: 1px solid var(--border); }
 
 /* ── Section heading ── */
 .sec {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.05rem;
+    font-size: 0.92rem;
     font-weight: 600;
-    color: var(--text);
-    padding-bottom: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
 }
 
 /* ── KPI Cards ── */
 .kpi-wrap {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 1.1rem 1.3rem;
-    min-height: 108px;
+    border-radius: 10px;
+    padding: 0.8rem 1rem;
+    min-height: 82px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: border-color .25s, box-shadow .25s;
+    transition: border-color .18s;
 }
-.kpi-wrap:hover { border-color: var(--accent); box-shadow: 0 0 20px rgba(124,58,237,0.15); }
+.kpi-wrap:hover { border-color: var(--border-h); }
 .kpi-label {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     color: var(--muted);
     white-space: nowrap;
 }
 .kpi-val {
     font-family: 'Outfit', sans-serif;
-    font-size: 2.1rem;
-    font-weight: 900;
+    font-size: 1.6rem;
+    font-weight: 800;
     color: var(--text);
-    line-height: 1.05;
+    line-height: 1.1;
     font-variant-numeric: tabular-nums;
 }
 .kpi-delta-pos { color: var(--success); font-size: 0.78rem; font-weight: 600; margin-top: 2px; }
@@ -266,11 +240,9 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     font-size: clamp(0.72rem, 2.6vw, 1rem);
     font-weight: 700;
     color: #fff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
     position: relative;
     cursor: default;
-    transition: transform .2s ease, filter .2s ease;
-    animation: ballPop .45s cubic-bezier(0.34,1.56,0.64,1) both;
+    transition: filter .15s ease;
 }
 .ball-plus {
     flex: 0 0 auto;
@@ -278,47 +250,21 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     font-size: clamp(0.85rem, 2.4vw, 1.2rem);
     line-height: 1;
 }
-.ball::after {
-    content: '';
-    position: absolute;
-    top: 8px; left: 12px;
-    width: 12px; height: 8px;
-    background: radial-gradient(ellipse, rgba(255,255,255,0.65), transparent);
-    border-radius: 50%;
-    pointer-events: none;
-}
-.ball:hover { transform: scale(1.18) translateY(-3px); filter: brightness(1.25); z-index: 10; }
+.ball:hover { filter: brightness(1.12); }
 
-/* Zone colors — official Korean Lotto 645 */
-.b1  { background: radial-gradient(circle at 33% 33%, #fde68a, #b45309); box-shadow: 0 4px 14px rgba(251,191,36,.65), inset 0 -4px 10px rgba(0,0,0,.35); }
-.b11 { background: radial-gradient(circle at 33% 33%, #93c5fd, #1d4ed8); box-shadow: 0 4px 14px rgba(59,130,246,.65), inset 0 -4px 10px rgba(0,0,0,.35); }
-.b21 { background: radial-gradient(circle at 33% 33%, #fca5a5, #b91c1c); box-shadow: 0 4px 14px rgba(239,68,68,.65), inset 0 -4px 10px rgba(0,0,0,.35); }
-.b31 { background: radial-gradient(circle at 33% 33%, #d1d5db, #4b5563); box-shadow: 0 4px 14px rgba(107,114,128,.55), inset 0 -4px 10px rgba(0,0,0,.35); }
-.b41 { background: radial-gradient(circle at 33% 33%, #86efac, #065f46); box-shadow: 0 4px 14px rgba(16,185,129,.65), inset 0 -4px 10px rgba(0,0,0,.35); }
+/* Zone colors — official Korean Lotto 645 (flat, no outer glow) */
+.b1  { background: #f0a020; }
+.b11 { background: #2f7fd8; }
+.b21 { background: #d23c3c; }
+.b31 { background: #7b8290; }
+.b41 { background: #1f9e63; }
 
 /* Bonus ball */
-.bonus {
-    background: radial-gradient(circle at 33% 33%, #fef9c3, #ca8a04);
-    box-shadow: 0 0 8px #fbbf24, 0 0 20px #fbbf24, 0 0 40px #f59e0b, inset 0 -4px 10px rgba(0,0,0,.35);
-    animation: ballPop .45s cubic-bezier(0.34,1.56,0.64,1) both, neonPulse 2.2s ease-in-out infinite;
-}
-.ball:nth-child(1) { animation-delay: .00s; }
-.ball:nth-child(2) { animation-delay: .08s; }
-.ball:nth-child(3) { animation-delay: .16s; }
-.ball:nth-child(4) { animation-delay: .24s; }
-.ball:nth-child(5) { animation-delay: .32s; }
-.ball:nth-child(6) { animation-delay: .40s; }
-.ball:nth-child(7) { animation-delay: .55s; }
-@keyframes ballPop {
-    0%   { opacity:0; transform:scale(0.3) rotate(-20deg); }
-    75%  { transform:scale(1.08) rotate(4deg); }
-    100% { opacity:1; transform:scale(1) rotate(0); }
-}
-@keyframes neonPulse {
-    0%,100% { box-shadow: 0 0 8px #fbbf24, 0 0 20px #fbbf24, 0 0 40px #f59e0b, inset 0 -4px 10px rgba(0,0,0,.35); }
-    50%      { box-shadow: 0 0 14px #fbbf24, 0 0 36px #fbbf24, 0 0 70px #f59e0b, inset 0 -4px 10px rgba(0,0,0,.35); }
-}
+.bonus { background: #c98a06; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); }
 
+/* Hit / miss marking — used when a recommendation is compared to a draw. */
+.ball-miss { opacity: .28; filter: grayscale(1); }
+.ball-hit  { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--success); }
 /* ── Badges ── */
 .badge-hot  { display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,rgba(239,68,68,.18),rgba(239,68,68,.05));border:1px solid rgba(239,68,68,.4);color:#fca5a5;font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:700;padding:2px 9px;border-radius:999px; }
 .badge-warm { display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.4);color:#fde68a;font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:700;padding:2px 9px;border-radius:999px; }
@@ -326,14 +272,14 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
 
 /* ── Combo card ── */
 .combo {
-    background: var(--bg-raise);
+    background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 10px;
-    transition: border-color .2s, box-shadow .2s, transform .2s;
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 8px;
+    transition: border-color .18s;
 }
-.combo:hover { border-color: var(--accent); box-shadow: 0 6px 24px rgba(124,58,237,0.2); transform: translateY(-2px); }
+.combo:hover { border-color: var(--border-h); }
 .combo-meta { font-size: 0.74rem; color: var(--muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
 
 /* ── Draw history row ── */
@@ -357,20 +303,19 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
 [data-testid="stMetric"] {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: .9rem 1.1rem;
-    transition: border-color .25s, box-shadow .25s;
+    border-radius: 10px;
+    padding: .75rem .95rem;
+    transition: border-color .18s;
 }
-[data-testid="stMetric"]:hover { border-color: var(--accent); box-shadow: 0 0 18px rgba(124,58,237,.14); }
-[data-testid="stMetricLabel"] > div { font-size:.7rem !important; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--muted) !important; }
-[data-testid="stMetricValue"] > div { font-family:'Outfit',sans-serif !important; font-size:1.9rem !important; font-weight:900 !important; }
+[data-testid="stMetric"]:hover { border-color: var(--border-h); }
+[data-testid="stMetricLabel"] > div { font-size:.68rem !important; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--muted) !important; }
+[data-testid="stMetricValue"] > div { font-family:'Outfit',sans-serif !important; font-size:1.5rem !important; font-weight:800 !important; }
 
 /* ── Progress bar ── */
 .prog-wrap { margin-bottom: 1rem; }
 .prog-label { display:flex; justify-content:space-between; color:var(--muted); font-size:.78rem; margin-bottom:5px; }
 .prog-track { background:var(--bg-raise); border-radius:999px; height:7px; overflow:hidden; }
-.prog-fill { height:100%; border-radius:999px; box-shadow:0 0 8px var(--accent); animation:fillGrow 1.2s ease-out both; }
-@keyframes fillGrow { from { width:0%; } }
+.prog-fill { height:100%; border-radius:999px; }
 
 /* ── Tab styling ── */
 [data-testid="stTabs"] [data-baseweb="tab"] {
@@ -407,17 +352,24 @@ def _bz(n: int) -> str:
     if n <= 40:  return "b31"
     return "b41"
 
-def balls_html(nums, bonus=None, size=48, spread=False) -> str:
+def balls_html(nums, bonus=None, size=48, spread=False, hits=None) -> str:
     """Render lotto balls as HTML string.
 
     `size` is the ideal ball diameter. Long lists wrap onto several lines by
     default; `spread=True` (for a single 6-ball draw) instead spreads them
     evenly across the full width on one line, shrinking them to fit on a phone.
+
+    Pass `hits` (a set of winning numbers) to mark each ball: numbers in the set
+    get a green ring, the rest are dimmed. Used to show how a recommendation
+    scored against an actual draw.
     """
     cls = "balls-row spread" if spread else "balls-row"
     s = f'<div class="{cls}" style="--bs:{size}px">'
     for n in nums:
-        s += f'<div class="ball {_bz(n)}">{n}</div>'
+        mark = ""
+        if hits is not None:
+            mark = " ball-hit" if n in hits else " ball-miss"
+        s += f'<div class="ball {_bz(n)}{mark}">{n}</div>'
     if bonus is not None:
         s += '<span class="ball-plus">+</span>'
         s += f'<div class="ball bonus">{bonus}</div>'
@@ -472,12 +424,9 @@ def refresh():
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="padding:16px 8px 20px;border-bottom:1px solid var(--border);margin-bottom:12px">
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:1.35rem;font-weight:700;color:#fff;line-height:1.2">
+    <div style="padding:2px 2px 12px;border-bottom:1px solid var(--border);margin-bottom:10px">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:1rem;font-weight:700;color:var(--text);line-height:1.2">
             🎱 로또 분석기
-        </div>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.1em">
-            Lotto 6/45 Analysis Hub
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -511,64 +460,148 @@ total = len(draws)
 # 🏠 홈
 # ════════════════════════════════════════════════════════════════════════════
 if page == "🏠 홈":
+    hot_nums  = [n for n, sc in scores.items() if sc.category == "Hot"]
+    cold_nums = [n for n, sc in scores.items() if sc.category == "Cold"]
+    next_no   = latest.draw_no + 1
+
     st.markdown(f"""
     <div class="hero">
-        <div class="hero-badge">실시간 분석</div>
         <div class="hero-title">🎱 로또 6/45 분석 허브</div>
-        <div class="hero-sub">총 {total:,}회차 데이터 기반 · 최신 {latest.draw_no}회 반영</div>
+        <div class="hero-sub">{total:,}회차 분석 · 최신 {latest.draw_no}회</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # KPI row
-    hot_nums  = [n for n, sc in scores.items() if sc.category == "Hot"]
-    cold_nums = [n for n, sc in scores.items() if sc.category == "Cold"]
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1: st.markdown(kpi("총 분석 회차", f"{total:,}회", f"제 1회 ~ {latest.draw_no}회", "neu"), unsafe_allow_html=True)
-    with c2: st.markdown(kpi("최근 회차", f"{latest.draw_no}회", str(latest.draw_date), "neu"), unsafe_allow_html=True)
-    with c3: st.markdown(kpi("🔥 핫 번호", f"{len(hot_nums)}개", "최근 출현 활발", "pos"), unsafe_allow_html=True)
-    with c4: st.markdown(kpi("❄️ 콜드 번호", f"{len(cold_nums)}개", "장기 미출현", "neg"), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    left, right = st.columns([3, 2], gap="large")
-
-    with left:
-        st.markdown('<div class="sec">🏆 최신 당첨 번호</div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="card">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--muted);margin-bottom:10px">
-                제 {latest.draw_no}회 · {latest.draw_date}
-            </div>
-            {balls_html(sorted(latest.numbers), latest.bonus, size=52, spread=True)}
+    # ── 1. 지난 회차 당첨 번호 ───────────────────────────────────────────────
+    st.markdown(f'<div class="sec">🏆 지난 {latest.draw_no}회 당첨 번호</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="card">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--muted);margin-bottom:8px">
+            {latest.draw_date}
         </div>
-        """, unsafe_allow_html=True)
+        {balls_html(sorted(latest.numbers), latest.bonus, size=46, spread=True)}
+    </div>
+    """, unsafe_allow_html=True)
 
-        if recommendations:
-            st.markdown('<div class="sec" style="margin-top:1.2rem">🎯 최근 추천 번호</div>', unsafe_allow_html=True)
-            recent_recommendations = sorted(recommendations, key=lambda r: r.target_draw_no, reverse=True)[:3]
-            for rec in recent_recommendations:
-                c = rec.combination
-                st.markdown(f"""
-                <div class="combo">
-                    {balls_html(c.numbers, size=42)}
-                    <div class="combo-meta">
-                        {c.strategy} · 홀짝 {c.odd_even} · 고저 {c.high_low} ·
+    # ── 2. 추천 적중 결과 ────────────────────────────────────────────────────
+    # 추천이 저장된 회차와 실제 추첨이 끝난 회차가 항상 일치하지는 않는다
+    # (예: 최신 추첨은 1238회인데 추천은 1237회까지만 있는 경우). 그래서
+    # "이미 추첨이 끝났고 추천도 있는" 가장 최근 회차를 골라 채점한다.
+    draw_by_no = {d.draw_no: d for d in draws}
+    scored_nos = sorted(
+        {r.target_draw_no for r in recommendations if r.target_draw_no in draw_by_no},
+        reverse=True,
+    )
+    scored_no = scored_nos[0] if scored_nos else None
+
+    if scored_no is None:
+        st.markdown('<div class="sec" style="margin-top:1.4rem">🎯 추천 적중 결과</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="card" style="color:var(--muted);font-size:.85rem">'
+            '채점할 수 있는 추천 이력이 아직 없습니다.</div>',
+            unsafe_allow_html=True)
+    else:
+        target_draw = draw_by_no[scored_no]
+        win_set = set(target_draw.numbers)
+        prev_recs = sorted(
+            [r for r in recommendations if r.target_draw_no == scored_no],
+            key=lambda r: r.recommendation_id,
+        )[:5]
+
+        st.markdown(f'<div class="sec" style="margin-top:1.4rem">🎯 {scored_no}회 추천 적중 결과</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="font-size:.74rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;margin-bottom:8px">'
+            f'{scored_no}회 당첨번호 {" ".join(f"{n:02d}" for n in sorted(target_draw.numbers))}'
+            f' + {target_draw.bonus:02d}</div>',
+            unsafe_allow_html=True)
+
+        best = 0
+        for rec in prev_recs:
+            c = rec.combination
+            n_hit = len([n for n in c.numbers if n in win_set])
+            best = max(best, n_hit)
+            bonus_hit = target_draw.bonus in c.numbers
+
+            tone = "var(--success)" if n_hit >= 3 else "var(--muted)"
+            label = f"{n_hit}개 적중" if n_hit else "미적중"
+            if bonus_hit:
+                label += " +보너스"
+
+            st.markdown(f"""
+            <div class="combo">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
+                        {c.strategy}
+                    </div>
+                    <div style="font-size:.72rem;font-weight:700;color:{tone};font-family:'JetBrains Mono',monospace">
+                        {label}
+                    </div>
+                </div>
+                {balls_html(c.numbers, size=38, spread=True, hits=win_set)}
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(
+            f'<div style="font-size:.76rem;color:var(--muted);margin:-2px 0 4px">'
+            f'추천 {len(prev_recs)}개 중 최고 성적 <b style="color:var(--text)">{best}개 적중</b></div>',
+            unsafe_allow_html=True)
+
+    # ── 3. 다음 회차 추천 번호 ───────────────────────────────────────────────
+    # 보통은 최신 회차 + 1이지만, 추천이 그보다 앞선 회차에 저장돼 있으면
+    # 아직 추첨되지 않은 회차 중 가장 가까운 쪽을 보여준다.
+    future_nos = sorted({r.target_draw_no for r in recommendations
+                         if r.target_draw_no > latest.draw_no})
+    if next_no not in future_nos and future_nos:
+        next_no = future_nos[0]
+
+    next_recs = sorted(
+        [r for r in recommendations if r.target_draw_no == next_no],
+        key=lambda r: r.recommendation_id,
+    )[:5]
+
+    st.markdown(f'<div class="sec" style="margin-top:1.4rem">🔮 다음 {next_no}회 추천 번호</div>',
+                unsafe_allow_html=True)
+
+    if not next_recs:
+        st.markdown(
+            f'<div class="card" style="color:var(--muted);font-size:.85rem">'
+            f'{next_no}회 추천 조합이 아직 없습니다. '
+            f'“🎰 조합 생성” 페이지에서 만들 수 있습니다.</div>',
+            unsafe_allow_html=True)
+    else:
+        for i, rec in enumerate(next_recs, 1):
+            c = rec.combination
+            st.markdown(f"""
+            <div class="combo">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
+                        #{i} · {c.strategy}
+                    </div>
+                    <div style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace">
                         합계 {c.total_sum} · 🔥{c.hot_count} 🌡️{c.warm_count} ❄️{c.cold_count}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                {balls_html(c.numbers, size=38, spread=True)}
+            </div>
+            """, unsafe_allow_html=True)
 
-    with right:
-        st.markdown('<div class="sec">🔥 핫 번호</div>', unsafe_allow_html=True)
+    # ── 4. 핫 / 콜드 번호 (맨 아래) ──────────────────────────────────────────
+    st.markdown('<div class="sec" style="margin-top:1.6rem">🌡️ 핫 · 콜드 번호</div>',
+                unsafe_allow_html=True)
+    h_col, c_col = st.columns(2, gap="medium")
+
+    with h_col:
+        st.markdown('<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">'
+                    '🔥 핫 번호 — 최근 출현 활발</div>', unsafe_allow_html=True)
         hot_sorted = sorted(hot_nums, key=lambda n: scores[n].final_score, reverse=True)[:9]
-        rows = [hot_sorted[i:i+3] for i in range(0, len(hot_sorted), 3)]
-        for row in rows:
-            st.markdown(balls_html(row, size=42), unsafe_allow_html=True)
+        st.markdown(balls_html(hot_sorted, size=36), unsafe_allow_html=True)
 
-        st.markdown('<div class="sec" style="margin-top:1.2rem">❄️ 콜드 번호</div>', unsafe_allow_html=True)
+    with c_col:
+        st.markdown('<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">'
+                    '❄️ 콜드 번호 — 장기 미출현</div>', unsafe_allow_html=True)
         cold_sorted = sorted(cold_nums, key=lambda n: scores[n].final_score)[:9]
-        rows = [cold_sorted[i:i+3] for i in range(0, len(cold_sorted), 3)]
-        for row in rows:
-            st.markdown(balls_html(row, size=42), unsafe_allow_html=True)
+        st.markdown(balls_html(cold_sorted, size=36), unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
 # 📊 번호 통계
