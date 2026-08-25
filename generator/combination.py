@@ -57,11 +57,26 @@ class CombinationConstraints:
     exclude_arithmetic_sequence: bool = True
     max_per_decade: int | None = 3
     exclude_latest_draw_numbers: bool = False
+    include_numbers: tuple[int, ...] = ()
+    exclude_numbers: tuple[int, ...] = ()
 
     def validate(self) -> None:
         """Validate combination constraint values."""
         for name in ("odd_count", "even_count", "low_count", "high_count"):
             _validate_count_bound(name, getattr(self, name))
+        for name in ("include_numbers", "exclude_numbers"):
+            numbers = getattr(self, name)
+            if any(not 1 <= number <= 45 for number in numbers):
+                raise CombinationGenerationError(f"{name} must contain numbers between 1 and 45.")
+            if len(set(numbers)) != len(numbers):
+                raise CombinationGenerationError(f"{name} must not contain duplicates.")
+        if len(self.include_numbers) > 6:
+            raise CombinationGenerationError("include_numbers cannot hold more than 6 numbers.")
+        overlap = set(self.include_numbers) & set(self.exclude_numbers)
+        if overlap:
+            raise CombinationGenerationError(
+                f"A number cannot be both included and excluded: {sorted(overlap)}"
+            )
         if self.sum_min > self.sum_max:
             raise CombinationGenerationError("sum_min must be less than or equal to sum_max.")
         if self.max_consecutive_pairs < 0:
@@ -127,14 +142,23 @@ def generate_combinations(
     if len(pool) < 6:
         raise CombinationGenerationError("Not enough candidate numbers to generate combinations.")
 
+    pinned = tuple(sorted(set(constraints.include_numbers)))
+    missing = [number for number in pinned if number not in scores_by_number]
+    if missing:
+        raise CombinationGenerationError(f"No score data for included numbers: {missing}")
+
     excluded = {tuple(sorted(combo)) for combo in excluded_combinations}
     generated: dict[tuple[int, ...], GeneratedCombination] = {}
     attempts = 0
     strategy_name = _normalize_strategy(strategy)
 
-    while len(generated) < count and attempts < max_attempts:
+    # Every accepted combination shrinks the space left to search, so a large
+    # batch needs proportionally more tries than a handful does.
+    budget = max(max_attempts, count * 2000)
+
+    while len(generated) < count and attempts < budget:
         attempts += 1
-        numbers = _pick_numbers(pool, scores_by_number, strategy_name, rng)
+        numbers = _pick_numbers(pool, scores_by_number, strategy_name, rng, pinned)
         if numbers in generated or numbers in excluded:
             continue
         if not _matches_constraints(numbers, constraints):
@@ -154,8 +178,14 @@ def _build_candidate_pool(
     latest_draw: LottoDraw | None,
     constraints: CombinationConstraints,
 ) -> list[int]:
-    """Build a candidate number pool, optionally excluding the latest draw numbers."""
+    """Build a candidate number pool, honouring the exclusion settings.
+
+    Numbers the caller pinned with `include_numbers` survive every exclusion —
+    an explicit pick beats a blanket rule like "drop the latest draw".
+    """
     excluded = set(latest_draw.numbers) if latest_draw and constraints.exclude_latest_draw_numbers else set()
+    excluded |= set(constraints.exclude_numbers)
+    excluded -= set(constraints.include_numbers)
     return [number for number in range(1, 46) if number in scores_by_number and number not in excluded]
 
 
@@ -168,27 +198,60 @@ def _normalize_strategy(strategy: str) -> str:
     return normalized
 
 
+STRATEGY_MIXES = {
+    "Hot Mix":  {"Hot": 3, "Warm": 2, "Cold": 1},
+    "Cold Mix": {"Hot": 1, "Warm": 3, "Cold": 2},
+    "Balanced": {"Hot": 2, "Warm": 2, "Cold": 2},
+    "Hybrid":   {"Hot": 2, "Warm": 3, "Cold": 1},
+}
+
+
+def _scale_mix(mix: dict[str, int], slots: int) -> dict[str, int]:
+    """Shrink a six-number category mix to `slots` numbers, keeping its shape.
+
+    Pinned numbers take up part of the combination, so the strategy only picks
+    what is left. Seats are handed out by largest remainder, which keeps the
+    strategy's character instead of always starving the smallest category.
+    """
+    total = sum(mix.values())
+    if slots >= total or total == 0:
+        return mix
+    exact = {name: value * slots / total for name, value in mix.items()}
+    scaled = {name: int(value) for name, value in exact.items()}
+    for name, _ in sorted(exact.items(), key=lambda kv: kv[1] - int(kv[1]), reverse=True):
+        if sum(scaled.values()) >= slots:
+            break
+        scaled[name] += 1
+    return scaled
+
+
 def _pick_numbers(
     pool: list[int],
     scores_by_number: dict[int, NumberScore],
     strategy: str,
     rng: random.Random,
+    pinned: tuple[int, ...] = (),
 ) -> tuple[int, ...]:
-    """Pick six candidate numbers according to the requested strategy."""
+    """Pick six candidate numbers according to the requested strategy.
+
+    `pinned` numbers are always present; the strategy fills the rest.
+    """
+    pinned = tuple(sorted(set(pinned)))
+    slots = 6 - len(pinned)
+    if slots <= 0:
+        return pinned[:6]
+
+    rest = [number for number in pool if number not in pinned]
+    if len(rest) < slots:
+        raise CombinationGenerationError("Not enough candidate numbers to generate combinations.")
+
     if strategy == "Random":
-        return tuple(sorted(rng.sample(pool, 6)))
+        return tuple(sorted(pinned + tuple(rng.sample(rest, slots))))
 
-    grouped = _group_pool_by_category(pool, scores_by_number)
-    if strategy == "Hot Mix":
-        numbers = _sample_category_mix(grouped, {"Hot": 3, "Warm": 2, "Cold": 1}, rng)
-    elif strategy == "Cold Mix":
-        numbers = _sample_category_mix(grouped, {"Hot": 1, "Warm": 3, "Cold": 2}, rng)
-    elif strategy == "Balanced":
-        numbers = _sample_category_mix(grouped, {"Hot": 2, "Warm": 2, "Cold": 2}, rng)
-    else:
-        numbers = _sample_category_mix(grouped, {"Hot": 2, "Warm": 3, "Cold": 1}, rng)
-
-    return tuple(sorted(_fill_to_six(numbers, pool, rng)))
+    grouped = _group_pool_by_category(rest, scores_by_number)
+    mix = _scale_mix(STRATEGY_MIXES.get(strategy, STRATEGY_MIXES["Hybrid"]), slots)
+    numbers = _sample_category_mix(grouped, mix, rng)
+    return tuple(sorted(pinned + tuple(_fill_to(numbers, rest, rng, slots))))
 
 
 def _sample_category_mix(
@@ -204,10 +267,12 @@ def _sample_category_mix(
     return selected
 
 
-def _fill_to_six(selected: list[int], pool: list[int], rng: random.Random) -> list[int]:
-    """Fill a partial selection with random unique numbers until it has six numbers."""
+def _fill_to(selected: list[int], pool: list[int], rng: random.Random, target: int) -> list[int]:
+    """Fill a partial selection with random unique numbers until it has `target` numbers."""
+    if len(selected) >= target:
+        return selected[:target]
     remaining = [number for number in pool if number not in selected]
-    selected.extend(rng.sample(remaining, 6 - len(selected)))
+    selected.extend(rng.sample(remaining, target - len(selected)))
     return selected
 
 

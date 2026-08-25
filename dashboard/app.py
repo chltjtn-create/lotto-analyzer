@@ -928,40 +928,92 @@ elif page == "🎰 조합 생성":
 
     st.markdown('<div class="sec">🎰 번호 조합 생성</div>', unsafe_allow_html=True)
 
+    # 화면에 보이는 이름과 생성기가 받는 전략 이름을 명시적으로 이어준다.
+    # 예전에는 "Hot"/"Cold"를 그대로 넘겨서 항상 생성에 실패했다.
+    STRATEGY_LABELS = {
+        "Hybrid (기본)": "Hybrid",
+        "Balanced (균형)": "Balanced",
+        "Hot Mix (과열 위주)": "Hot Mix",
+        "Cold Mix (냉각 위주)": "Cold Mix",
+        "Random (무작위)": "Random",
+    }
+
     with st.form("combo_form"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            strategy = st.selectbox("전략", ["Hybrid", "Hot", "Balanced", "Cold"], key="strat")
-            count = st.number_input("생성 수", 1, 20, 5, key="cnt")
+            strategy_label = st.selectbox("전략", list(STRATEGY_LABELS), key="strat")
+            games = st.number_input("게임 수", 1, 100, 5, key="cnt",
+                                    help="1~100게임까지 한 번에 생성합니다.")
         with c2:
             sum_min = st.number_input("합계 최솟값", 21, 230, 100, key="smin")
             sum_max = st.number_input("합계 최댓값", 21, 230, 180, key="smax")
         with c3:
             max_consec = st.selectbox("최대 연속쌍", [0, 1, 2, 3], index=1, key="mconsec")
             exclude_latest = st.checkbox("최신 회차 번호 제외", value=False, key="excl")
+
+        st.markdown('<div style="font-size:.8rem;color:var(--muted);margin:6px 0 2px">'
+                    '내 번호 지정 (선택)</div>', unsafe_allow_html=True)
+        p1, p2 = st.columns(2)
+        with p1:
+            include_numbers = st.multiselect(
+                "반드시 포함할 번호", list(range(1, 46)), key="incl_nums",
+                help="최대 5개. 지정한 번호는 모든 게임에 들어갑니다.",
+            )
+        with p2:
+            exclude_numbers = st.multiselect(
+                "제외할 번호", list(range(1, 46)), key="excl_nums",
+                help="지정한 번호는 어떤 게임에도 들어가지 않습니다.",
+            )
+
         save = st.checkbox("추천 이력 저장", value=True, key="save_rec")
         submitted = st.form_submit_button("✨ 조합 생성", use_container_width=True)
 
     if submitted:
-        constraints = CombinationConstraints(
-            sum_min=sum_min, sum_max=sum_max,
-            max_consecutive_pairs=max_consec,
-            exclude_latest_draw_numbers=exclude_latest,
-        )
-        with st.spinner("조합 생성 중..."):
-            try:
-                combos = generate_combinations(
-                    scores_by_number=scores,
-                    latest_draw=latest,
-                    constraints=constraints,
-                    strategy=strategy,
-                    count=int(count),
-                )
-            except CombinationGenerationError:
-                combos = []
+        strategy = STRATEGY_LABELS[strategy_label]
+        count = int(games)
+
+        # 남은 자리가 없으면 전략이 개입할 여지가 사라진다. 6개를 다 지정하면
+        # 조합이 하나로 확정되므로 그때는 1게임만 만들 수 있다.
+        blocked = None
+        if len(include_numbers) > 5:
+            blocked = ("포함할 번호는 최대 5개까지 지정할 수 있습니다. "
+                       f"지금 {len(include_numbers)}개를 골랐습니다.")
+        elif len(set(range(1, 46)) - set(exclude_numbers)) < 6:
+            blocked = "제외할 번호가 너무 많아 남은 번호가 6개 미만입니다."
+
+        combos, error = [], blocked
+        if not blocked:
+            constraints = CombinationConstraints(
+                sum_min=sum_min, sum_max=sum_max,
+                max_consecutive_pairs=max_consec,
+                exclude_latest_draw_numbers=exclude_latest,
+                include_numbers=tuple(sorted(include_numbers)),
+                exclude_numbers=tuple(sorted(exclude_numbers)),
+            )
+            with st.spinner(f"{count}게임 생성 중..."):
+                try:
+                    combos = generate_combinations(
+                        scores_by_number=scores,
+                        latest_draw=latest,
+                        constraints=constraints,
+                        strategy=strategy,
+                        count=count,
+                    )
+                except CombinationGenerationError as exc:
+                    error = str(exc)
 
         if not combos:
-            st.error("조건에 맞는 조합을 생성하지 못했습니다. 조건을 완화해보세요.")
+            st.error(f"조합을 생성하지 못했습니다. {error or ''}")
+            if include_numbers:
+                odd = sum(1 for n in include_numbers if n % 2)
+                st.info(
+                    "지정한 번호가 조건과 충돌했을 수 있습니다. 확인해보세요:\n\n"
+                    f"- 고른 번호 합계 {sum(include_numbers)} "
+                    f"(합계 범위 {sum_min}~{sum_max})\n"
+                    f"- 홀수 {odd}개 / 짝수 {len(include_numbers) - odd}개 "
+                    "(한쪽이 5개 이상이면 홀짝 조건에 걸립니다)\n"
+                    "- 합계 범위를 넓히거나 지정 번호를 줄여보세요."
+                )
         else:
             if save:
                 try:
@@ -980,32 +1032,72 @@ elif page == "🎰 조합 생성":
                         )
                         db.save_recommendation(record)
                     _load_raw.clear()
-                    st.success(f"{len(combos)}개 조합이 추천 이력에 저장됐습니다.")
+                    st.success(f"{len(combos)}개 조합이 {target_draw_no}회 추천 이력에 저장됐습니다.")
+                    if len(combos) > 5:
+                        st.warning(
+                            f"{target_draw_no}회 추천이 이미 저장돼 있으므로, 월요일 자동 실행은 "
+                            "이 회차의 추천을 새로 만들지 않고 건너뜁니다. "
+                            "홈 화면에는 저장된 것 중 앞 5개만 표시됩니다."
+                        )
                 except Exception as e:
                     st.warning(f"이력 저장 실패: {e}")
 
             st.markdown(f"""
             <div style="font-family:'Space Grotesk',sans-serif;font-size:1.1rem;font-weight:600;
                         color:var(--text);margin:16px 0 12px">
-                ✨ {len(combos)}개 조합 생성 완료
+                ✨ {len(combos)}게임 생성 완료
             </div>""", unsafe_allow_html=True)
 
+            # 게임이 많으면 공을 줄이고 메타 정보를 한 줄로 접어 목록이 끝없이
+            # 길어지지 않게 한다.
+            many = len(combos) > 10
+            ball_size = 30 if many else 46
+
             for i, combo in enumerate(combos, 1):
-                st.markdown(f"""
-                <div class="combo">
-                    <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;
-                                font-family:'JetBrains Mono',monospace">
-                        #{i} · {combo.strategy} · 점수 {combo.score:.1f}
+                if many:
+                    meta = (f"합계 {combo.total_sum} · 홀짝 {combo.odd_even} · "
+                            f"🔥{combo.hot_count} 🌡️{combo.warm_count} ❄️{combo.cold_count}")
+                    st.markdown(f"""
+                    <div class="combo" style="padding:.35rem .7rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;
+                                    font-size:.68rem;color:var(--muted);
+                                    font-family:'JetBrains Mono',monospace;margin-bottom:3px">
+                            <span>#{i}</span><span>{meta}</span>
+                        </div>
+                        {balls_html(combo.numbers, size=ball_size, spread=True)}
                     </div>
-                    {balls_html(combo.numbers, size=46, spread=True)}
-                    <div class="combo-meta">
-                        홀짝 {combo.odd_even} · 고저 {combo.high_low} · 합계 {combo.total_sum}
-                        <span class="badge-hot" style="margin-left:6px">🔥 {combo.hot_count}</span>
-                        <span class="badge-warm" style="margin-left:4px">🌡️ {combo.warm_count}</span>
-                        <span class="badge-cold" style="margin-left:4px">❄️ {combo.cold_count}</span>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="combo">
+                        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;
+                                    font-family:'JetBrains Mono',monospace">
+                            #{i} · {combo.strategy} · 점수 {combo.score:.1f}
+                        </div>
+                        {balls_html(combo.numbers, size=ball_size, spread=True)}
+                        <div class="combo-meta">
+                            홀짝 {combo.odd_even} · 고저 {combo.high_low} · 합계 {combo.total_sum}
+                            <span class="badge-hot" style="margin-left:6px">🔥 {combo.hot_count}</span>
+                            <span class="badge-warm" style="margin-left:4px">🌡️ {combo.warm_count}</span>
+                            <span class="badge-cold" style="margin-left:4px">❄️ {combo.cold_count}</span>
+                        </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+
+            # 용지에 옮겨 적거나 보관할 수 있게 번호만 뽑아준다.
+            plain = "\n".join(
+                f"{i:3d}. " + "  ".join(f"{n:02d}" for n in combo.numbers)
+                for i, combo in enumerate(combos, 1)
+            )
+            with st.expander(f"📋 번호만 보기 ({len(combos)}게임)"):
+                st.code(plain, language=None)
+                st.download_button(
+                    "번호 목록 내려받기 (.txt)",
+                    data=plain,
+                    file_name=f"lotto_{latest.draw_no + 1}회_{len(combos)}게임.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                )
 
             st.markdown('<div class="disclaimer">⚠️ 이 조합은 통계적 분석 결과이며, 실제 당첨을 보장하지 않습니다. 로또는 완전한 무작위 추첨입니다.</div>', unsafe_allow_html=True)
     else:
@@ -1031,7 +1123,8 @@ elif page == "🧪 백테스트":
     with st.form("bt_form"):
         c1, c2 = st.columns(2)
         with c1:
-            bt_strategy = st.selectbox("전략", ["Hybrid", "Hot", "Balanced", "Cold"], key="bt_strat")
+            bt_strategy = st.selectbox(
+                "전략", ["Hybrid", "Balanced", "Hot Mix", "Cold Mix", "Random"], key="bt_strat")
             bt_rounds = st.number_input("테스트 회차 수", 10, 200, 50, key="bt_rounds")
         with c2:
             bt_sum_min = st.number_input("합계 최솟값", 21, 230, 100, key="bt_smin")
