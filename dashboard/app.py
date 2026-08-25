@@ -336,11 +336,11 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
 # ── Imports (after set_page_config) ─────────────────────────────────────────
 from datetime import date
 
-from database.db_manager import LottoDatabaseManager
-from analysis.frequency import analyze_number_frequency
-from analysis.pattern import analyze_patterns
-from analysis.scoring import calculate_number_scores
-from domain.models import LottoDraw
+from lotto_analyzer.database.db_manager import LottoDatabaseManager
+from lotto_analyzer.analysis.frequency import analyze_number_frequency
+from lotto_analyzer.analysis.pattern import analyze_patterns
+from lotto_analyzer.analysis.scoring import calculate_number_scores
+from lotto_analyzer.domain.models import LottoDraw
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -920,7 +920,7 @@ elif page == "🔍 패턴 분석":
 # 🎰 조합 생성
 # ════════════════════════════════════════════════════════════════════════════
 elif page == "🎰 조합 생성":
-    from generator.combination import (
+    from lotto_analyzer.generator.combination import (
         CombinationConstraints,
         CombinationGenerationError,
         generate_combinations,
@@ -1017,7 +1017,7 @@ elif page == "🎰 조합 생성":
         else:
             if save:
                 try:
-                    from analysis.evaluation import RecommendationRecord
+                    from lotto_analyzer.analysis.evaluation import RecommendationRecord
 
                     db = LottoDatabaseManager()
                     target_draw_no = latest.draw_no + 1
@@ -1116,7 +1116,7 @@ elif page == "🎰 조합 생성":
 # ════════════════════════════════════════════════════════════════════════════
 elif page == "🧪 백테스트":
     import plotly.graph_objects as go
-    from analysis.backtest import run_backtest
+    from lotto_analyzer.analysis.backtest import run_backtest
 
     st.markdown('<div class="sec">🧪 전략 백테스트</div>', unsafe_allow_html=True)
 
@@ -1135,8 +1135,8 @@ elif page == "🧪 백테스트":
         if len(draws) < int(bt_rounds) + 10:
             st.warning(f"데이터 부족: {len(draws)}회차 (요청 {bt_rounds}회차)")
         else:
-            from analysis.backtest import BacktestError
-            from generator.combination import CombinationConstraints
+            from lotto_analyzer.analysis.backtest import BacktestError
+            from lotto_analyzer.generator.combination import CombinationConstraints
             constraints = CombinationConstraints(sum_min=bt_sum_min, sum_max=bt_sum_max)
             bt_end = latest.draw_no
             bt_start = draws[-int(bt_rounds)].draw_no
@@ -1299,7 +1299,7 @@ elif page == "🔄 데이터 업데이트":
         draw_from = st.number_input("시작 회차", 1, latest.draw_no + 50, latest.draw_no + 1, key="fetch_from")
         draw_to   = st.number_input("종료 회차", 1, latest.draw_no + 50, latest.draw_no + 5, key="fetch_to")
         if st.button("⬇️ 데이터 수집", use_container_width=True):
-            from collector.crawler import LottoCrawler, LottoCrawlerError
+            from lotto_analyzer.collector.crawler import LottoCrawler, LottoCrawlerError
             with st.spinner("수집 중..."):
                 try:
                     crawler = LottoCrawler()
@@ -1328,7 +1328,7 @@ elif page == "🔄 데이터 업데이트":
         </div>""", unsafe_allow_html=True)
         excel_path = st.text_input("엑셀 파일 경로", placeholder="D:/Downloads/lotto.xlsx", key="xls_path")
         if st.button("📥 엑셀 가져오기", use_container_width=True):
-            from collector.local_loader import LocalDataLoadError, load_draws_from_excel
+            from lotto_analyzer.collector.local_loader import LocalDataLoadError, load_draws_from_excel
             with st.spinner("가져오는 중..."):
                 try:
                     imported = load_draws_from_excel(excel_path)
