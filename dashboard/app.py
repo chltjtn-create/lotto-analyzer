@@ -156,8 +156,8 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 12px;
+    padding: 0.7rem 1rem;
+    margin-bottom: 10px;
     transition: border-color .18s ease;
 }
 .card:hover { border-color: var(--border-h); }
@@ -217,7 +217,7 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     justify-content: flex-start;
     gap: clamp(5px, 1.4vw, 10px);
     flex-wrap: wrap;
-    padding: 6px 0;
+    padding: 2px 0;
     width: 100%;
 }
 /* `spread` is for a single draw (6 balls + optional bonus): the row is spread
@@ -275,8 +275,8 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 0.7rem 0.9rem;
-    margin-bottom: 8px;
+    padding: 0.45rem 0.8rem;
+    margin-bottom: 6px;
     transition: border-color .18s;
 }
 .combo:hover { border-color: var(--border-h); }
@@ -478,7 +478,7 @@ if page == "🏠 홈":
         <div style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--muted);margin-bottom:8px">
             {latest.draw_date}
         </div>
-        {balls_html(sorted(latest.numbers), latest.bonus, size=46, spread=True)}
+        {balls_html(sorted(latest.numbers), latest.bonus, size=42, spread=True)}
     </div>
     """, unsafe_allow_html=True)
 
@@ -494,7 +494,7 @@ if page == "🏠 홈":
     scored_no = scored_nos[0] if scored_nos else None
 
     if scored_no is None:
-        st.markdown('<div class="sec" style="margin-top:1.4rem">🎯 추천 적중 결과</div>',
+        st.markdown('<div class="sec" style="margin-top:1rem">🎯 추천 적중 결과</div>',
                     unsafe_allow_html=True)
         st.markdown(
             '<div class="card" style="color:var(--muted);font-size:.85rem">'
@@ -508,7 +508,7 @@ if page == "🏠 홈":
             key=lambda r: r.recommendation_id,
         )[:5]
 
-        st.markdown(f'<div class="sec" style="margin-top:1.4rem">🎯 {scored_no}회 추천 적중 결과</div>',
+        st.markdown(f'<div class="sec" style="margin-top:1rem">🎯 {scored_no}회 추천 적중 결과</div>',
                     unsafe_allow_html=True)
         st.markdown(
             f'<div style="font-size:.74rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;margin-bottom:8px">'
@@ -538,7 +538,7 @@ if page == "🏠 홈":
                         {label}
                     </div>
                 </div>
-                {balls_html(c.numbers, size=38, spread=True, hits=win_set)}
+                {balls_html(c.numbers, size=34, spread=True, hits=win_set)}
             </div>
             """, unsafe_allow_html=True)
 
@@ -560,7 +560,7 @@ if page == "🏠 홈":
         key=lambda r: r.recommendation_id,
     )[:5]
 
-    st.markdown(f'<div class="sec" style="margin-top:1.4rem">🔮 다음 {next_no}회 추천 번호</div>',
+    st.markdown(f'<div class="sec" style="margin-top:1rem">🔮 다음 {next_no}회 추천 번호</div>',
                 unsafe_allow_html=True)
 
     if not next_recs:
@@ -582,12 +582,12 @@ if page == "🏠 홈":
                         합계 {c.total_sum} · 🔥{c.hot_count} 🌡️{c.warm_count} ❄️{c.cold_count}
                     </div>
                 </div>
-                {balls_html(c.numbers, size=38, spread=True)}
+                {balls_html(c.numbers, size=34, spread=True)}
             </div>
             """, unsafe_allow_html=True)
 
     # ── 4. 핫 / 콜드 번호 (맨 아래) ──────────────────────────────────────────
-    st.markdown('<div class="sec" style="margin-top:1.6rem">🌡️ 핫 · 콜드 번호</div>',
+    st.markdown('<div class="sec" style="margin-top:1.1rem">🌡️ 핫 · 콜드 번호</div>',
                 unsafe_allow_html=True)
     h_col, c_col = st.columns(2, gap="medium")
 
