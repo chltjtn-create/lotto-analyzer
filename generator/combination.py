@@ -8,7 +8,7 @@ from datetime import date
 from typing import Iterable
 
 from lotto_analyzer.analysis.pattern import analyze_draw_pattern
-from lotto_analyzer.analysis.scoring import NumberScore
+from lotto_analyzer.analysis.scoring import NumberScore, calculate_number_scores
 from lotto_analyzer.domain.models import LottoDraw
 
 DISCLAIMER = "본 결과는 통계 분석 기반 참고자료이며\n당첨을 보장하지 않습니다."
@@ -87,6 +87,10 @@ class CombinationConstraints:
             raise CombinationGenerationError("min_ac_value must be between 0 and 10.")
         if self.max_per_decade is not None and not 1 <= self.max_per_decade <= 6:
             raise CombinationGenerationError("max_per_decade must be between 1 and 6.")
+
+
+DEFAULT_RECOMMENDATION_COUNT = 5
+DEFAULT_RECOMMENDATION_CONSTRAINTS = CombinationConstraints(exclude_latest_draw_numbers=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +175,29 @@ def generate_combinations(
         )
 
     return list(generated.values())
+
+
+def generate_from_history(
+    draws: list[LottoDraw],
+    *,
+    strategy: str = "Hybrid",
+    count: int = DEFAULT_RECOMMENDATION_COUNT,
+    constraints: CombinationConstraints = DEFAULT_RECOMMENDATION_CONSTRAINTS,
+    seed: int | None = None,
+) -> list[GeneratedCombination]:
+    """Use the same history, exclusions and scoring in production and backtests."""
+    if not draws:
+        raise CombinationGenerationError("Draw history is required.")
+    history = sorted(draws, key=lambda draw: draw.draw_no)
+    return generate_combinations(
+        calculate_number_scores(history),
+        latest_draw=history[-1],
+        constraints=constraints,
+        strategy=strategy,
+        count=count,
+        seed=seed,
+        excluded_combinations=[draw.numbers for draw in history],
+    )
 
 
 def _build_candidate_pool(

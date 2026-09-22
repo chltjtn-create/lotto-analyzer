@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from lotto_analyzer.analysis.evaluation import RecommendationEvaluation, RecommendationRecord
+from lotto_analyzer.analysis.evaluation import RecommendationEvaluation, RecommendationRecord, evaluate_recommendation
 from lotto_analyzer.config import LOTTO_CSV_PATH, LOTTO_DB_PATH, LOTTO_JSON_PATH
 from lotto_analyzer.domain.models import LottoDraw
 from lotto_analyzer.generator.combination import GeneratedCombination
@@ -102,6 +102,11 @@ class LottoDatabaseManager:
                     )
                     """
                 )
+                columns = {row["name"] for row in connection.execute("PRAGMA table_info(recommendations)")}
+                if "is_active" not in columns:
+                    connection.execute(
+                        "ALTER TABLE recommendations ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+                    )
         except sqlite3.Error as exc:
             raise LottoDatabaseError(f"Failed to initialize database: {exc}") from exc
 
@@ -113,6 +118,9 @@ class LottoDatabaseManager:
 
         try:
             with self._connect() as connection:
+                previous = connection.execute(
+                    "SELECT * FROM draws WHERE draw_no = ?", (draw.draw_no,)
+                ).fetchone()
                 connection.execute(
                     """
                     INSERT INTO draws (
@@ -140,6 +148,14 @@ class LottoDatabaseManager:
                         "updated_at": now,
                     },
                 )
+                if previous is not None and self._row_to_draw(previous) != draw:
+                    rows = connection.execute(
+                        "SELECT * FROM recommendations WHERE target_draw_no = ?", (draw.draw_no,)
+                    ).fetchall()
+                    for row in rows:
+                        self._write_evaluation(
+                            connection, evaluate_recommendation(self._row_to_recommendation(row), draw)
+                        )
         except sqlite3.Error as exc:
             raise LottoDatabaseError(f"Failed to save draw {draw.draw_no}: {exc}") from exc
 
@@ -250,53 +266,11 @@ class LottoDatabaseManager:
         return self.export_to_csv(csv_path), self.export_to_json(json_path)
 
     def save_recommendation(self, record: RecommendationRecord) -> None:
-        """Insert or update one generated recommendation record."""
+        """Insert an immutable recommendation; exact retries are idempotent."""
         self.initialize_database()
-        now = self._utc_now()
-        combination = record.combination
         try:
             with self._connect() as connection:
-                connection.execute(
-                    """
-                    INSERT INTO recommendations (
-                        recommendation_id, target_draw_no, created_date, numbers_json,
-                        score, odd_even, high_low, total_sum, hot_count, warm_count,
-                        cold_count, strategy, disclaimer, created_at, updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(recommendation_id) DO UPDATE SET
-                        target_draw_no = excluded.target_draw_no,
-                        created_date = excluded.created_date,
-                        numbers_json = excluded.numbers_json,
-                        score = excluded.score,
-                        odd_even = excluded.odd_even,
-                        high_low = excluded.high_low,
-                        total_sum = excluded.total_sum,
-                        hot_count = excluded.hot_count,
-                        warm_count = excluded.warm_count,
-                        cold_count = excluded.cold_count,
-                        strategy = excluded.strategy,
-                        disclaimer = excluded.disclaimer,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        record.recommendation_id,
-                        record.target_draw_no,
-                        record.created_date.isoformat(),
-                        json.dumps(list(combination.numbers), ensure_ascii=False),
-                        combination.score,
-                        combination.odd_even,
-                        combination.high_low,
-                        combination.total_sum,
-                        combination.hot_count,
-                        combination.warm_count,
-                        combination.cold_count,
-                        combination.strategy,
-                        combination.disclaimer,
-                        now,
-                        now,
-                    ),
-                )
+                self._insert_recommendation(connection, record)
         except sqlite3.Error as exc:
             raise LottoDatabaseError(
                 f"Failed to save recommendation {record.recommendation_id}: {exc}"
@@ -304,13 +278,79 @@ class LottoDatabaseManager:
 
     def save_recommendations(self, records: Iterable[RecommendationRecord]) -> int:
         """Save many recommendation records and return the processed count."""
-        processed_count = 0
-        for record in records:
-            self.save_recommendation(record)
-            processed_count += 1
-        return processed_count
+        records = list(records)
+        self.initialize_database()
+        with self._connect() as connection:
+            for record in records:
+                self._insert_recommendation(connection, record)
+        return len(records)
 
-    def list_recommendations(self, target_draw_no: int | None = None) -> list[RecommendationRecord]:
+    def replace_recommendations(self, records: Iterable[RecommendationRecord]) -> int:
+        """Activate a new batch atomically, retaining previous batches as history."""
+        records = list(records)
+        if not records:
+            raise LottoDatabaseError("A replacement batch cannot be empty.")
+        target = records[0].target_draw_no
+        strategy = records[0].combination.strategy
+        if any(r.target_draw_no != target or r.combination.strategy != strategy for r in records):
+            raise LottoDatabaseError("A batch must have one target draw and strategy.")
+        ids = [r.recommendation_id for r in records]
+        if len(ids) != len(set(ids)):
+            raise LottoDatabaseError("Recommendation IDs must be unique within a batch.")
+        self.initialize_database()
+        with self._connect() as connection:
+            active_rows = connection.execute(
+                "SELECT * FROM recommendations WHERE target_draw_no = ? AND strategy = ? AND is_active = 1",
+                (target, strategy),
+            ).fetchall()
+            active = {
+                row["recommendation_id"]: self._row_to_recommendation(row)
+                for row in active_rows
+            }
+            if active == {record.recommendation_id: record for record in records}:
+                return len(records)
+            latest = connection.execute("SELECT MAX(draw_no) FROM draws").fetchone()[0]
+            if latest is not None and target <= latest:
+                raise LottoDatabaseError("Cannot replace forecasts for an announced draw.")
+            connection.execute(
+                "UPDATE recommendations SET is_active = 0 WHERE target_draw_no = ? AND strategy = ?",
+                (target, strategy),
+            )
+            for record in records:
+                self._insert_recommendation(connection, record)
+        return len(records)
+
+    def _insert_recommendation(self, connection: sqlite3.Connection, record: RecommendationRecord) -> None:
+        previous = connection.execute(
+            "SELECT * FROM recommendations WHERE recommendation_id = ?", (record.recommendation_id,)
+        ).fetchone()
+        if previous is not None:
+            if self._row_to_recommendation(previous) == record:
+                return
+            raise LottoDatabaseError("Saved recommendations are immutable; create a new batch.")
+        latest = connection.execute("SELECT MAX(draw_no) FROM draws").fetchone()[0]
+        if latest is not None and record.target_draw_no <= latest:
+            raise LottoDatabaseError("Cannot save a new forecast for an announced draw.")
+        values = record.to_dict()
+        values["numbers_json"] = json.dumps(values.pop("numbers"))
+        values["score"] = record.combination.score
+        values["created_at"] = values["updated_at"] = self._utc_now()
+        connection.execute(
+            """INSERT INTO recommendations (
+                recommendation_id, target_draw_no, created_date, numbers_json,
+                score, odd_even, high_low, total_sum, hot_count, warm_count,
+                cold_count, strategy, disclaimer, created_at, updated_at, is_active
+            ) VALUES (
+                :recommendation_id, :target_draw_no, :created_date, :numbers_json,
+                :score, :odd_even, :high_low, :total_sum, :hot_count, :warm_count,
+                :cold_count, :strategy, :disclaimer, :created_at, :updated_at, :is_active
+            )""",
+            values,
+        )
+
+    def list_recommendations(
+        self, target_draw_no: int | None = None, *, include_archived: bool = False
+    ) -> list[RecommendationRecord]:
         """Return saved recommendations, optionally filtered by target draw number."""
         self.initialize_database()
         try:
@@ -320,18 +360,20 @@ class LottoDatabaseManager:
                         """
                         SELECT *
                         FROM recommendations
+                        WHERE is_active = 1 OR ?
                         ORDER BY target_draw_no ASC, recommendation_id ASC
-                        """
+                        """,
+                        (include_archived,),
                     ).fetchall()
                 else:
                     rows = connection.execute(
                         """
                         SELECT *
                         FROM recommendations
-                        WHERE target_draw_no = ?
+                        WHERE target_draw_no = ? AND (is_active = 1 OR ?)
                         ORDER BY recommendation_id ASC
                         """,
-                        (target_draw_no,),
+                        (target_draw_no, include_archived),
                     ).fetchall()
         except sqlite3.Error as exc:
             raise LottoDatabaseError(f"Failed to list recommendations: {exc}") from exc
@@ -380,6 +422,30 @@ class LottoDatabaseManager:
                 f"Failed to save evaluation {evaluation.recommendation_id}: {exc}"
             ) from exc
 
+    def _write_evaluation(
+        self, connection: sqlite3.Connection, evaluation: RecommendationEvaluation
+    ) -> None:
+        values = evaluation.to_dict()
+        for name in ("recommended_numbers", "actual_numbers", "matched_numbers"):
+            values[name + "_json"] = json.dumps(values.pop(name))
+        values["evaluated_at"] = self._utc_now()
+        connection.execute(
+            """INSERT INTO recommendation_evaluations (
+                recommendation_id, target_draw_no, recommended_numbers_json, actual_numbers_json,
+                bonus, matched_numbers_json, match_count, bonus_matched, result_label, evaluated_at
+            ) VALUES (
+                :recommendation_id, :target_draw_no, :recommended_numbers_json, :actual_numbers_json,
+                :bonus, :matched_numbers_json, :match_count, :bonus_matched, :result_label, :evaluated_at
+            ) ON CONFLICT(recommendation_id) DO UPDATE SET
+                target_draw_no=excluded.target_draw_no,
+                recommended_numbers_json=excluded.recommended_numbers_json,
+                actual_numbers_json=excluded.actual_numbers_json,
+                bonus=excluded.bonus, matched_numbers_json=excluded.matched_numbers_json,
+                match_count=excluded.match_count, bonus_matched=excluded.bonus_matched,
+                result_label=excluded.result_label, evaluated_at=excluded.evaluated_at""",
+            values,
+        )
+
     def save_evaluations(self, evaluations: Iterable[RecommendationEvaluation]) -> int:
         """Save many evaluation results and return the processed count."""
         processed_count = 0
@@ -388,17 +454,20 @@ class LottoDatabaseManager:
             processed_count += 1
         return processed_count
 
-    def list_evaluations(self) -> list[RecommendationEvaluation]:
+    def list_evaluations(self, *, include_archived: bool = False) -> list[RecommendationEvaluation]:
         """Return saved recommendation evaluations."""
         self.initialize_database()
         try:
             with self._connect() as connection:
                 rows = connection.execute(
                     """
-                    SELECT *
-                    FROM recommendation_evaluations
-                    ORDER BY target_draw_no ASC, recommendation_id ASC
-                    """
+                    SELECT e.*
+                    FROM recommendation_evaluations e
+                    JOIN recommendations r ON r.recommendation_id = e.recommendation_id
+                    WHERE r.is_active = 1 OR ?
+                    ORDER BY e.target_draw_no ASC, e.recommendation_id ASC
+                    """,
+                    (include_archived,),
                 ).fetchall()
         except sqlite3.Error as exc:
             raise LottoDatabaseError(f"Failed to list evaluations: {exc}") from exc
@@ -455,6 +524,7 @@ class LottoDatabaseManager:
             target_draw_no=int(row["target_draw_no"]),
             created_date=datetime.strptime(str(row["created_date"]), "%Y-%m-%d").date(),
             combination=combination,
+            is_active=bool(row["is_active"]),
         )
 
     @staticmethod

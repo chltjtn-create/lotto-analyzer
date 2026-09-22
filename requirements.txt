@@ -4,3 +4,4 @@ matplotlib
 openpyxl
 streamlit
 plotly
+beautifulsoup4>=4.12,<5

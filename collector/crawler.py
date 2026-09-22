@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -70,7 +70,9 @@ class LottoCrawler:
             raise LottoDrawNotFoundError(f"Draw {draw_no} was not found.")
 
         try:
-            return LottoDraw.from_dhlottery_new_payload(record)
+            draw = LottoDraw.from_dhlottery_new_payload(record)
+            _validate_response_draw(draw_no, draw)
+            return draw
         except (KeyError, TypeError, ValueError, DrawValidationError) as exc:
             raise LottoDataError(f"Invalid payload for draw {draw_no}: {exc}") from exc
 
@@ -162,9 +164,14 @@ class LottoCrawler:
         except (KeyError, TypeError) as exc:
             raise LottoDataError(f"Lottery endpoint returned an unexpected shape for draw {draw_no}.") from exc
 
+        if not isinstance(records, list):
+            raise LottoDataError("Lottery records must be a list.")
         if not records:
             return None
-        return records[0]
+        for record in records:
+            if isinstance(record, Mapping) and str(record.get("ltEpsd")) == str(draw_no):
+                return record
+        raise LottoDataError(f"Response does not contain requested draw {draw_no}.")
 
     def _request_result_page_draw(self, draw_no: int) -> LottoDraw:
         """Request and parse one draw from the official result HTML page."""
@@ -203,24 +210,61 @@ def estimate_latest_draw_no(reference_date: date | None = None) -> int:
     return (elapsed_days // 7) + 1
 
 
+def latest_expected_draw_no(reference_time: datetime | None = None) -> int:
+    """Allow Saturday's result to be published before treating it as overdue."""
+    kst = timezone(timedelta(hours=9))
+    current = reference_time or datetime.now(kst)
+    current = current.replace(tzinfo=kst) if current.tzinfo is None else current.astimezone(kst)
+    latest = estimate_latest_draw_no(current.date())
+    if current.weekday() == 5 and current.time() < time(21, 0):
+        latest -= 1
+    return max(0, latest)
+
+
+def require_current_history(draws: list[LottoDraw]) -> None:
+    """Prevent saving forecasts against stale or future-dated history."""
+    expected = latest_expected_draw_no()
+    if not draws or draws[-1].draw_no != expected:
+        stored = draws[-1].draw_no if draws else 0
+        raise LottoDataError(
+            f"Update draw data before saving recommendations: stored={stored}, expected={expected}."
+        )
+
+
+def _validate_response_draw(requested: int, draw: LottoDraw) -> None:
+    if draw.draw_no != requested:
+        raise LottoDataError(f"Requested draw {requested}, received draw {draw.draw_no}.")
+    expected_date = FIRST_LOTTO_DRAW_DATE + timedelta(weeks=requested - 1)
+    if draw.draw_date != expected_date:
+        raise LottoDataError(f"Unexpected date for draw {requested}: {draw.draw_date}.")
+
+
 def _parse_result_page_html(draw_no: int, html: str) -> LottoDraw:
     """Parse draw numbers from the official draw-result HTML page."""
     if "서비스 접근 대기" in html or "접속이 차단" in html:
         raise LottoDataError("Lottery result page returned an access wait/block page.")
 
-    numbers = [int(item) for item in re.findall(r'class="[^"]*ball_645[^"]*"[^>]*>\s*(\d{1,2})\s*<', html)]
-    if len(numbers) < 7:
-        raise LottoDataError(f"Could not parse draw numbers from result page for draw {draw_no}.")
+    from bs4 import BeautifulSoup
 
-    draw_date = _parse_result_page_date(html) or (
-        FIRST_LOTTO_DRAW_DATE + timedelta(days=(draw_no - 1) * 7)
-    )
-    return LottoDraw(
-        draw_no=draw_no,
-        draw_date=draw_date,
-        numbers=tuple(numbers[:6]),
-        bonus=numbers[6],
-    )
+    regions = BeautifulSoup(html, "html.parser").select(".win_result")
+    if len(regions) != 1:
+        raise LottoDataError("Could not identify one draw-result section.")
+    region = regions[0]
+    heading = region.find(["h2", "h3", "h4"])
+    match = re.search(r"(\d+)\s*회", heading.get_text(" ", strip=True) if heading else "")
+    if not match or int(match.group(1)) != draw_no:
+        raise LottoDataError(f"Result page does not identify requested draw {draw_no}.")
+    balls = region.select(".ball_645")
+    try:
+        draw_date = _parse_result_page_date(region.get_text(" ", strip=True))
+        if draw_date is None or len(balls) != 7:
+            raise LottoDataError(f"Incomplete result page for draw {draw_no}.")
+        numbers = [int(ball.get_text(strip=True)) for ball in balls]
+        draw = LottoDraw(draw_no, draw_date, tuple(numbers[:6]), numbers[6])
+        _validate_response_draw(draw_no, draw)
+        return draw
+    except (ValueError, DrawValidationError) as exc:
+        raise LottoDataError(f"Invalid result page for draw {draw_no}: {exc}") from exc
 
 
 def _parse_result_page_date(html: str) -> date | None:

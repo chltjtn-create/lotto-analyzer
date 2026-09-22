@@ -88,6 +88,7 @@ class EvaluationAndBacktestTest(unittest.TestCase):
                 max_per_decade=None,
             ),
             seed=3,
+            count=1,
         )
 
         self.assertEqual(summary.total_rounds, 3)

@@ -10,15 +10,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from lotto_analyzer.analysis.evaluation import RecommendationEvaluation, RecommendationRecord, evaluate_recommendation
+from lotto_analyzer.analysis.evaluation import RecommendationEvaluation, RecommendationRecord, evaluate_recommendation, make_recommendation_batch
 from lotto_analyzer.analysis.frequency import analyze_number_frequency
 from lotto_analyzer.analysis.pattern import analyze_patterns
 from lotto_analyzer.analysis.scoring import calculate_number_scores
 from lotto_analyzer.collector import LottoCrawler, LottoCrawlerError
-from lotto_analyzer.collector.crawler import estimate_latest_draw_no
+from lotto_analyzer.collector.crawler import latest_expected_draw_no, require_current_history
 from lotto_analyzer.config import BASE_DIR, LOG_DIR, ensure_project_directories
 from lotto_analyzer.database import LottoDatabaseManager
-from lotto_analyzer.generator import CombinationConstraints, GeneratedCombination, generate_combinations
+from lotto_analyzer.generator.combination import DEFAULT_RECOMMENDATION_COUNT, generate_from_history
 from lotto_analyzer.report import ChartExportError, export_all_charts, export_excel_report
 
 DISCLAIMER = "본 결과는 통계 분석 기반 참고자료이며\n당첨을 보장하지 않습니다."
@@ -168,6 +168,7 @@ def run_weekly_update(
         draws = database.list_draws()
         if not draws:
             raise RuntimeError("No draw data is available after update.")
+        require_current_history(draws)
 
         evaluations = _run_step(logger, "evaluate", lambda: _evaluate_due_recommendations(database, draws), 120)
         result.evaluated_recommendations = len(evaluations)
@@ -178,7 +179,9 @@ def run_weekly_update(
             lambda: _generate_next_recommendations(
                 database,
                 draws,
-                recommendation_count or int(os.getenv("LOTTO_RECOMMENDATION_COUNT", "5")),
+                recommendation_count if recommendation_count is not None else int(
+                    os.getenv("LOTTO_RECOMMENDATION_COUNT", str(DEFAULT_RECOMMENDATION_COUNT))
+                ),
                 strategy or os.getenv("LOTTO_RECOMMENDATION_STRATEGY", "Hybrid"),
             ),
             180,
@@ -247,15 +250,16 @@ def _fetch_new_draws(
 ) -> list:
     """Fetch draw numbers that are newer than the current database."""
     latest_stored = database.get_latest_draw_no() or 0
-    estimated_latest = estimate_latest_draw_no()
+    estimated_latest = latest_expected_draw_no()
     new_draws = []
 
     for draw_no in range(latest_stored + 1, estimated_latest + 1):
         try:
             draw = crawler.fetch_draw(draw_no)
         except LottoCrawlerError as exc:
-            result.warnings.append(f"Could not fetch draw {draw_no}: {exc}")
-            break
+            raise LottoCrawlerError(
+                f"Required draw {draw_no} could not be collected; recommendations were not updated: {exc}"
+            ) from exc
         new_draws.append(draw)
         result.fetched_draws.append(draw.draw_no)
 
@@ -270,15 +274,18 @@ def _evaluate_due_recommendations(
 ) -> list[RecommendationEvaluation]:
     """Evaluate saved recommendations whose target draw is already stored."""
     draw_by_no = {draw.draw_no: draw for draw in draws}
-    existing_ids = {evaluation.recommendation_id for evaluation in database.list_evaluations()}
+    existing = {
+        evaluation.recommendation_id: evaluation
+        for evaluation in database.list_evaluations(include_archived=True)
+    }
     evaluations = []
-    for record in database.list_recommendations():
-        if record.recommendation_id in existing_ids:
-            continue
+    for record in database.list_recommendations(include_archived=True):
         actual_draw = draw_by_no.get(record.target_draw_no)
         if actual_draw is None:
             continue
-        evaluations.append(evaluate_recommendation(record, actual_draw))
+        evaluation = evaluate_recommendation(record, actual_draw)
+        if existing.get(record.recommendation_id) != evaluation:
+            evaluations.append(evaluation)
     database.save_evaluations(evaluations)
     return evaluations
 
@@ -290,31 +297,23 @@ def _generate_next_recommendations(
     strategy: str,
 ) -> list[RecommendationRecord]:
     """Generate and save recommendations for the next draw after the current latest."""
+    require_current_history(draws)
     latest_draw = draws[-1]
     target_draw_no = latest_draw.draw_no + 1
-    existing = database.list_recommendations(target_draw_no)
+    existing = [
+        record for record in database.list_recommendations(target_draw_no)
+        if record.combination.strategy == strategy
+    ]
     if existing:
-        return existing
+        return []
 
-    scores = calculate_number_scores(draws)
-    combinations = generate_combinations(
-        scores,
-        latest_draw=latest_draw,
-        constraints=CombinationConstraints(exclude_latest_draw_numbers=True),
+    combinations = generate_from_history(
+        draws,
         strategy=strategy,
         count=count,
-        excluded_combinations=[draw.numbers for draw in draws],
     )
-    records = [
-        RecommendationRecord(
-            recommendation_id=_recommendation_id(target_draw_no, strategy, index),
-            target_draw_no=target_draw_no,
-            created_date=datetime.now().date(),
-            combination=combination,
-        )
-        for index, combination in enumerate(combinations, start=1)
-    ]
-    database.save_recommendations(records)
+    records = make_recommendation_batch(target_draw_no, combinations)
+    database.replace_recommendations(records)
     return records
 
 

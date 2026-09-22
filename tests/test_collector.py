@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Mapping
 
 from lotto_analyzer.collector.crawler import (
@@ -36,7 +36,7 @@ def record_for_draw(draw_no: int) -> dict[str, Any]:
     """Create a valid fake Donghaeng Lottery draw record (2026-01 redesign shape) for tests."""
     return {
         "ltEpsd": draw_no,
-        "ltRflYmd": "20021207",
+        "ltRflYmd": (date(2002, 12, 7) + timedelta(weeks=draw_no - 1)).strftime("%Y%m%d"),
         "tm1WnNo": 10,
         "tm2WnNo": 23,
         "tm3WnNo": 29,
@@ -127,6 +127,7 @@ class LottoCrawlerTest(unittest.TestCase):
         """Parse draw data from official result-page style HTML when JSON fails."""
         html = """
         <div class="win_result">
+            <h4><strong>1회</strong> 당첨결과</h4>
             <p class="desc">(2002년 12월 07일 추첨)</p>
             <span class="ball_645 lrg ball1">10</span>
             <span class="ball_645 lrg ball2">23</span>
@@ -153,6 +154,16 @@ class LottoCrawlerTest(unittest.TestCase):
         self.assertEqual(estimate_latest_draw_no(date(2002, 12, 7)), 1)
         self.assertEqual(estimate_latest_draw_no(date(2002, 12, 14)), 2)
         self.assertEqual(estimate_latest_draw_no(date(2002, 12, 13)), 1)
+
+    def test_invalid_html_calendar_date_is_data_error(self) -> None:
+        balls = "".join(f'<span class="ball_645">{n}</span>' for n in range(1, 8))
+        html = '<div class="win_result"><h4>1회</h4><p>2002년 13월 7일 추첨</p>' + balls + '</div>'
+        crawler = LottoCrawler(
+            fetch_json=lambda _: (_ for _ in ()).throw(LottoDataError("not json")),
+            fetch_html=lambda _: html,
+        )
+        with self.assertRaises(LottoDataError):
+            crawler.fetch_draw(1)
 
 
 if __name__ == "__main__":

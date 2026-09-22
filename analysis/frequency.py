@@ -108,6 +108,8 @@ def _normalize_draws(draws: Iterable[LottoDraw]) -> list[LottoDraw]:
     draw_numbers = [draw.draw_no for draw in normalized_draws]
     if len(draw_numbers) != len(set(draw_numbers)):
         raise FrequencyAnalysisError("Draw numbers must not contain duplicates.")
+    if any(second != first + 1 for first, second in zip(draw_numbers, draw_numbers[1:])):
+        raise FrequencyAnalysisError("Draw history contains missing rounds; repair it before analysis.")
     return normalized_draws
 
 

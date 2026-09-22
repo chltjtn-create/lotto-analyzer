@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Iterable
 
@@ -60,9 +61,9 @@ def export_excel_report(
         Font,
     )
     backtest_rows = [round_result.to_dict() for round_result in backtest_summary.rounds] if backtest_summary else []
-    if backtest_summary:
-        backtest_rows.insert(0, backtest_summary.to_dict())
     _write_rows(wb.create_sheet("백테스트"), backtest_rows, Font)
+    if backtest_summary:
+        _write_rows(wb.create_sheet("백테스트요약"), [backtest_summary.to_dict()], Font)
 
     try:
         wb.save(path)
@@ -95,4 +96,6 @@ def _stringify_cell(value: object) -> object:
     """Convert list-like cell values into readable text."""
     if isinstance(value, list | tuple):
         return ", ".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
     return value

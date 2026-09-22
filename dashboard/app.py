@@ -418,10 +418,7 @@ def _load_raw():
     return db.list_draws(), db.list_recommendations(), db.list_evaluations()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_analysis(_n_draws: int):
-    db = LottoDatabaseManager()
-    db.initialize_database()
-    draws = db.list_draws()
+def _load_analysis(draws):
     stats = analyze_number_frequency(draws)
     patterns = analyze_patterns(draws)
     scores = calculate_number_scores(draws)
@@ -449,7 +446,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.markdown("<hr style='border-color:var(--border);margin:16px 0'>", unsafe_allow_html=True)
-    if st.button("↺ 캐시 새로고침", use_container_width=True):
+    if st.button("↺ 캐시 새로고침", width="stretch"):
         refresh()
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -459,13 +456,23 @@ except Exception as exc:
     st.error(f"DB 연결 오류: {exc}")
     st.stop()
 
-if not draws:
+if not draws and page != "🔄 데이터 업데이트":
     st.warning("저장된 회차 데이터가 없습니다. 데이터 업데이트 페이지에서 데이터를 불러오세요.")
     st.stop()
 
-stats, patterns, scores = _load_analysis(len(draws))
-latest = draws[-1]
+latest = draws[-1] if draws else None
 total = len(draws)
+if page != "🔄 데이터 업데이트":
+    try:
+        stats, patterns, scores = _load_analysis(draws)
+    except Exception as exc:
+        st.error(f"분석 데이터 오류: {exc}")
+        st.stop()
+
+from lotto_analyzer.collector.crawler import latest_expected_draw_no
+expected_latest = latest_expected_draw_no()
+if latest and latest.draw_no != expected_latest:
+    st.warning(f"저장된 데이터: {latest.draw_no}회 / 확인이 필요한 최신 회차: {expected_latest}회")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 🏠 홈
@@ -643,7 +650,7 @@ elif page == "📊 번호 통계":
         yaxis=dict(gridcolor="#1e293b"),
         margin=dict(l=30, r=10, t=20, b=30), height=320, showlegend=False
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("<br>", unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["📋 상세 테이블", "📉 미출현 분석"])
@@ -698,7 +705,7 @@ elif page == "📊 번호 통계":
             yaxis=dict(gridcolor="#1e293b"),
             margin=dict(l=30, r=10, t=20, b=30), height=300, showlegend=False
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
         top_missing = [n for n, _ in missing[:10]]
         st.markdown(f'<div style="font-size:.8rem;color:var(--muted)">미출현 상위 10개 번호</div>', unsafe_allow_html=True)
         st.markdown(balls_html(top_missing, size=42), unsafe_allow_html=True)
@@ -739,7 +746,7 @@ elif page == "🔥 과열·냉각 분석":
         yaxis=dict(gridcolor="#1e293b"),
         margin=dict(l=30, r=10, t=50, b=30), height=340
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("<br>", unsafe_allow_html=True)
     c_hot, c_warm, c_cold = st.columns(3, gap="medium")
@@ -797,7 +804,7 @@ elif page == "🔥 과열·냉각 분석":
     )
     col_r, col_info = st.columns([2, 1])
     with col_r:
-        st.plotly_chart(fig_r, use_container_width=True)
+        st.plotly_chart(fig_r, width="stretch")
     with col_info:
         badge = {"Hot": '<span class="badge-hot">🔥 HOT</span>',
                  "Warm": '<span class="badge-warm">🌡️ WARM</span>',
@@ -850,7 +857,7 @@ elif page == "🔍 패턴 분석":
         oe_sorted = sorted(oe.items(), key=lambda x: x[1], reverse=True)
         keys, vals = zip(*oe_sorted) if oe_sorted else ([], [])
         colors_oe = ["#7c3aed" if i == 0 else "#1e293b" for i in range(len(keys))]
-        st.plotly_chart(_bar(list(keys), list(vals), colors_oe, "홀짝"), use_container_width=True)
+        st.plotly_chart(_bar(list(keys), list(vals), colors_oe, "홀짝"), width="stretch")
         best = oe_sorted[0] if oe_sorted else ("—", 0)
         st.markdown(f'<div style="text-align:center;color:var(--muted);font-size:.82rem">가장 많은 패턴: <b style="color:var(--text)">{best[0]}</b> ({best[1]}회)</div>', unsafe_allow_html=True)
 
@@ -859,7 +866,7 @@ elif page == "🔍 패턴 분석":
         hl_sorted = sorted(hl.items(), key=lambda x: x[1], reverse=True)
         keys, vals = zip(*hl_sorted) if hl_sorted else ([], [])
         colors_hl = ["#ef4444" if i == 0 else "#1e293b" for i in range(len(keys))]
-        st.plotly_chart(_bar(list(keys), list(vals), colors_hl, "고저"), use_container_width=True)
+        st.plotly_chart(_bar(list(keys), list(vals), colors_hl, "고저"), width="stretch")
 
     with tab_sum:
         sums = [p.total_sum for p in patterns.patterns]
@@ -877,7 +884,7 @@ elif page == "🔍 패턴 분석":
             xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
             margin=dict(l=30, r=10, t=30, b=30), height=300, showlegend=False
         )
-        st.plotly_chart(fig_h, use_container_width=True)
+        st.plotly_chart(fig_h, width="stretch")
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("합계 최솟값", f"{patterns.sum_min}")
         with c2: st.metric("합계 최댓값", f"{patterns.sum_max}")
@@ -897,7 +904,7 @@ elif page == "🔍 패턴 분석":
             xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
             margin=dict(l=30, r=10, t=20, b=30), height=280, showlegend=False
         )
-        st.plotly_chart(fig_s, use_container_width=True)
+        st.plotly_chart(fig_s, width="stretch")
 
     with tab_con:
         consec_counts = {}
@@ -917,7 +924,7 @@ elif page == "🔍 패턴 분석":
             xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
             margin=dict(l=30, r=10, t=20, b=30), height=280, showlegend=False
         )
-        st.plotly_chart(fig_c, use_container_width=True)
+        st.plotly_chart(fig_c, width="stretch")
         rate = patterns.consecutive_rate * 100
         st.markdown(f"""
         <div class="card">
@@ -934,7 +941,7 @@ elif page == "🎰 조합 생성":
     from lotto_analyzer.generator.combination import (
         CombinationConstraints,
         CombinationGenerationError,
-        generate_combinations,
+        generate_from_history,
     )
 
     st.markdown('<div class="sec">🎰 번호 조합 생성</div>', unsafe_allow_html=True)
@@ -962,7 +969,7 @@ elif page == "🎰 조합 생성":
             sum_max = st.number_input("합계 최댓값", 21, 230, 180, key="smax")
         with c3:
             max_consec = st.selectbox("최대 연속쌍", [0, 1, 2, 3], index=1, key="mconsec")
-            exclude_latest = st.checkbox("최신 회차 번호 제외", value=False, key="excl")
+            exclude_latest = st.checkbox("최신 회차 번호 제외", value=True, key="excl")
 
         st.markdown('<div style="font-size:.8rem;color:var(--muted);margin:6px 0 2px">'
                     '내 번호 지정 (선택)</div>', unsafe_allow_html=True)
@@ -978,13 +985,11 @@ elif page == "🎰 조합 생성":
                 help="지정한 번호는 어떤 게임에도 들어가지 않습니다.",
             )
 
-        # 기본 꺼짐: 켜면 해당 회차의 기존 추천을 덮어쓰고, 웹에서는 앱이
-        # 재시작되면 사라진다. 뽑아본 번호는 아래 "번호만 보기"로 남기면 된다.
         save = st.checkbox(
             "추천 이력에 저장", value=False, key="save_rec",
-            help="켜면 해당 회차의 기존 추천을 덮어씁니다. 웹에서는 앱 재시작 시 사라집니다.",
+            help="같은 회차·전략의 이전 추천은 보관하고 새 묶음을 활성화합니다. 웹 저장은 재시작 시 사라질 수 있습니다.",
         )
-        submitted = st.form_submit_button("✨ 조합 생성", use_container_width=True)
+        submitted = st.form_submit_button("✨ 조합 생성", width="stretch")
 
     if submitted:
         strategy = STRATEGY_LABELS[strategy_label]
@@ -1010,9 +1015,8 @@ elif page == "🎰 조합 생성":
             )
             with st.spinner(f"{count}게임 생성 중..."):
                 try:
-                    combos = generate_combinations(
-                        scores_by_number=scores,
-                        latest_draw=latest,
+                    combos = generate_from_history(
+                        draws,
                         constraints=constraints,
                         strategy=strategy,
                         count=count,
@@ -1035,20 +1039,13 @@ elif page == "🎰 조합 생성":
         else:
             if save:
                 try:
-                    from lotto_analyzer.analysis.evaluation import RecommendationRecord
+                    from lotto_analyzer.analysis.evaluation import make_recommendation_batch
+                    from lotto_analyzer.collector.crawler import require_current_history
 
                     db = LottoDatabaseManager()
                     target_draw_no = latest.draw_no + 1
-                    strategy_key = strategy.lower().replace(" ", "_")
-                    today = date.today()
-                    for index, combo in enumerate(combos, start=1):
-                        record = RecommendationRecord(
-                            recommendation_id=f"{target_draw_no}-{strategy_key}-{index:03d}",
-                            target_draw_no=target_draw_no,
-                            created_date=today,
-                            combination=combo,
-                        )
-                        db.save_recommendation(record)
+                    require_current_history(draws)
+                    db.replace_recommendations(make_recommendation_batch(target_draw_no, combos))
                     _load_raw.clear()
                     st.success(f"{len(combos)}개 조합이 {target_draw_no}회 추천 이력에 저장됐습니다.")
                     if len(combos) > 5:
@@ -1114,7 +1111,7 @@ elif page == "🎰 조합 생성":
                     data=plain,
                     file_name=f"lotto_{latest.draw_no + 1}회_{len(combos)}게임.txt",
                     mime="text/plain",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             st.markdown('<div class="disclaimer">⚠️ 이 조합은 통계적 분석 결과이며, 실제 당첨을 보장하지 않습니다. 로또는 완전한 무작위 추첨입니다.</div>', unsafe_allow_html=True)
@@ -1144,10 +1141,13 @@ elif page == "🧪 백테스트":
             bt_strategy = st.selectbox(
                 "전략", ["Hybrid", "Balanced", "Hot Mix", "Cold Mix", "Random"], key="bt_strat")
             bt_rounds = st.number_input("테스트 회차 수", 10, 200, 50, key="bt_rounds")
+            bt_count = st.number_input("회차당 게임 수", 1, 100, 5, key="bt_count")
         with c2:
             bt_sum_min = st.number_input("합계 최솟값", 21, 230, 100, key="bt_smin")
             bt_sum_max = st.number_input("합계 최댓값", 21, 230, 180, key="bt_smax")
-        bt_submit = st.form_submit_button("▶ 백테스트 실행", use_container_width=True)
+            bt_exclude = st.checkbox("최신 회차 번호 제외", value=True, key="bt_exclude")
+            bt_seed = st.number_input("재현 시드", 0, 2147483647, 20240617, key="bt_seed")
+        bt_submit = st.form_submit_button("▶ 백테스트 실행", width="stretch")
 
     if bt_submit:
         if len(draws) < int(bt_rounds) + 10:
@@ -1155,7 +1155,10 @@ elif page == "🧪 백테스트":
         else:
             from lotto_analyzer.analysis.backtest import BacktestError
             from lotto_analyzer.generator.combination import CombinationConstraints
-            constraints = CombinationConstraints(sum_min=bt_sum_min, sum_max=bt_sum_max)
+            constraints = CombinationConstraints(
+                sum_min=bt_sum_min, sum_max=bt_sum_max,
+                exclude_latest_draw_numbers=bt_exclude,
+            )
             bt_end = latest.draw_no
             bt_start = draws[-int(bt_rounds)].draw_no
             with st.spinner("백테스트 실행 중..."):
@@ -1166,15 +1169,29 @@ elif page == "🧪 백테스트":
                         end_draw_no=bt_end,
                         strategy=bt_strategy,
                         constraints=constraints,
+                        count=int(bt_count),
+                        seed=int(bt_seed),
                     )
                 except BacktestError as e:
                     st.error(f"백테스트 실패: {e}")
                     st.stop()
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.metric("테스트 회차", f"{result.total_rounds}회")
-            with c2: st.metric("3개 이상 적중", f"{result.match_3_count + result.match_4_count + result.match_5_count + result.match_6_count}회")
-            with c3: st.metric("평균 적중 수", f"{result.average_match_count:.2f}개")
-            with c4: st.metric("5등 이상", f"{result.match_3_count}회")
+            with c2: st.metric("평가 게임", f"{result.total_tickets}게임")
+            with c3: st.metric("게임당 평균 적중", f"{result.average_match_count:.2f}개")
+            with c4: st.metric("5등 이상", f"{sum(r.match_count >= 3 for r in result.rounds)}게임")
+            b1, b2, b3 = st.columns(3)
+            with b1: st.metric("균등 무작위 평균 적중", f"{result.random_average_match_count:.2f}개")
+            with b2: st.metric("무작위 대비 차이", f"{result.mean_match_difference:+.3f}개")
+            with b3: st.metric("회차별 최고 적중 평균", f"{result.average_best_match_count:.2f}개")
+            if result.difference_ci95 is not None:
+                low, high = result.difference_ci95
+                st.caption(f"회차 단위 차이의 근사 95% 구간: {low:+.3f} ~ {high:+.3f}")
+            st.caption(
+                f"무작위 기준은 필터 없이 회차당 {result.tickets_per_draw}게임씩 "
+                f"{result.baseline_repeats}회 반복한 평균입니다. 같은 기간에서 전략을 반복 선택하면 "
+                "성적이 낙관적으로 보일 수 있으며, 이 비교만으로 예측력 향상을 판단할 수 없습니다."
+            )
 
             # Distribution bar
             labels = ["0개", "1개", "2개", "3개", "4개", "5개", "6개"]
@@ -1194,7 +1211,7 @@ elif page == "🧪 백테스트":
                 xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
                 margin=dict(l=30, r=10, t=20, b=30), height=280, showlegend=False
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             st.markdown('<div class="sec" style="margin-top:1rem">상세 결과</div>', unsafe_allow_html=True)
             rows_bt = {
@@ -1205,7 +1222,7 @@ elif page == "🧪 백테스트":
                 "결과": [r.result_label for r in result.rounds],
             }
             import pandas as pd
-            st.dataframe(pd.DataFrame(rows_bt), use_container_width=True, height=300)
+            st.dataframe(pd.DataFrame(rows_bt), width="stretch", height=300)
 
 # ════════════════════════════════════════════════════════════════════════════
 # 📋 추천 이력
@@ -1215,6 +1232,11 @@ elif page == "📋 추천 이력":
 
     st.markdown('<div class="sec">📋 추천 번호 이력 및 평가</div>', unsafe_allow_html=True)
 
+    show_archived = st.checkbox("이전 추천 묶음 포함", key="show_archived")
+    if show_archived:
+        history_db = LottoDatabaseManager()
+        recommendations = history_db.list_recommendations(include_archived=True)
+        evaluations = history_db.list_evaluations(include_archived=True)
     if not recommendations:
         st.info("저장된 추천 이력이 없습니다.")
         st.stop()
@@ -1245,7 +1267,7 @@ elif page == "📋 추천 이력":
                 </div>
                 {balls_html(c.numbers, size=42, spread=True)}
                 <div class="combo-meta">
-                    {c.strategy} · 홀짝 {c.odd_even} · 고저 {c.high_low} · 합계 {c.total_sum}
+                    {c.strategy} · {'활성' if rec.is_active else '보관'} · 홀짝 {c.odd_even} · 고저 {c.high_low} · 합계 {c.total_sum}
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -1261,7 +1283,7 @@ elif page == "📋 추천 이력":
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("평가된 추천 수", f"{len(evaluations)}건")
             with c2: st.metric("3등 이상", f"{sum(result_counts.get(k,0) for k in ['1등','2등','3등'])}건")
-            with c3: st.metric("5등 이상 (5등+)", f"{sum(result_counts.get(k,0) for k in ['4등','5등'])}건")
+            with c3: st.metric("5등 이상 (5등+)", f"{sum(result_counts.get(k,0) for k in ['1등','2등','3등','4등','5등'])}건")
 
             fig = go.Figure(go.Pie(
                 labels=list(result_counts.keys()),
@@ -1277,7 +1299,7 @@ elif page == "📋 추천 이력":
                 legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#94a3b8")),
                 margin=dict(l=10, r=10, t=20, b=20), height=280
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             import pandas as pd
             rows_e: list[dict] = []
@@ -1291,7 +1313,7 @@ elif page == "📋 추천 이력":
                     "보너스": "O" if ev.bonus_matched else "",
                     "결과": ev.result_label,
                 })
-            st.dataframe(pd.DataFrame(rows_e), use_container_width=True)
+            st.dataframe(pd.DataFrame(rows_e), width="stretch")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 🔄 데이터 업데이트
@@ -1301,8 +1323,8 @@ elif page == "🔄 데이터 업데이트":
 
     c1, c2, c3 = st.columns(3)
     with c1: st.metric("저장된 회차", f"{total}회")
-    with c2: st.metric("최신 회차", f"{latest.draw_no}회")
-    with c3: st.metric("최신 날짜", str(latest.draw_date))
+    with c2: st.metric("최신 회차", f"{latest.draw_no}회" if latest else "-")
+    with c3: st.metric("최신 날짜", str(latest.draw_date) if latest else "-")
 
     st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
     tab_fetch, tab_import, tab_weekly = st.tabs(["최신 데이터 수집", "엑셀 가져오기", "주간 업데이트"])
@@ -1314,9 +1336,11 @@ elif page == "🔄 데이터 업데이트":
                 동행복권 공식 API에서 최신 회차 데이터를 수집합니다.
             </div>
         </div>""", unsafe_allow_html=True)
-        draw_from = st.number_input("시작 회차", 1, latest.draw_no + 50, latest.draw_no + 1, key="fetch_from")
-        draw_to   = st.number_input("종료 회차", 1, latest.draw_no + 50, latest.draw_no + 5, key="fetch_to")
-        if st.button("⬇️ 데이터 수집", use_container_width=True):
+        stored_no = latest.draw_no if latest else 0
+        upper = max(expected_latest, stored_no + 1)
+        draw_from = st.number_input("시작 회차", 1, upper, min(stored_no + 1, upper), key="fetch_from")
+        draw_to = st.number_input("종료 회차", 1, upper, upper, key="fetch_to")
+        if st.button("⬇️ 데이터 수집", width="stretch"):
             from lotto_analyzer.collector.crawler import LottoCrawler, LottoCrawlerError
             with st.spinner("수집 중..."):
                 try:
@@ -1345,7 +1369,7 @@ elif page == "🔄 데이터 업데이트":
             </div>
         </div>""", unsafe_allow_html=True)
         excel_path = st.text_input("엑셀 파일 경로", placeholder="D:/Downloads/lotto.xlsx", key="xls_path")
-        if st.button("📥 엑셀 가져오기", use_container_width=True):
+        if st.button("📥 엑셀 가져오기", width="stretch"):
             from lotto_analyzer.collector.local_loader import LocalDataLoadError, load_draws_from_excel
             with st.spinner("가져오는 중..."):
                 try:
@@ -1365,13 +1389,13 @@ elif page == "🔄 데이터 업데이트":
         st.markdown("""
         <div class="card">
             <div style="font-size:.9rem;color:var(--muted);margin-bottom:14px">
-                주간 업데이트: 최신 회차 수집 + 추천 번호 생성 + 이메일 발송
+                주간 업데이트: 최신 회차 수집 · 기존 추천 평가 · 다음 회차 추천
             </div>
         </div>""", unsafe_allow_html=True)
         wk_count  = st.number_input("추천 수", 1, 20, 5, key="wk_cnt")
-        wk_strat  = st.selectbox("전략", ["Hybrid", "Hot", "Balanced", "Cold"], key="wk_strat")
-        if st.button("🔁 주간 업데이트 실행", use_container_width=True):
-            from automation.weekly_update import run_weekly_update
+        wk_strat  = st.selectbox("전략", ["Hybrid", "Hot Mix", "Balanced", "Cold Mix", "Random"], key="wk_strat")
+        if st.button("🔁 주간 업데이트 실행", width="stretch"):
+            from lotto_analyzer.automation.weekly_update import run_weekly_update
             with st.spinner("주간 업데이트 실행 중..."):
                 result = run_weekly_update(recommendation_count=int(wk_count), strategy=wk_strat)
             if result.errors:
@@ -1383,4 +1407,3 @@ elif page == "🔄 데이터 업데이트":
                 )
             _load_raw.clear()
             _load_analysis.clear()
-            st.rerun()

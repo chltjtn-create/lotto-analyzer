@@ -8,7 +8,7 @@ from datetime import date
 from typing import Sequence
 
 from lotto_analyzer.analysis.backtest import BacktestError, run_backtest
-from lotto_analyzer.analysis.evaluation import evaluate_recommendation
+from lotto_analyzer.analysis.evaluation import evaluate_recommendation, make_recommendation_batch
 from lotto_analyzer.analysis.frequency import (
     FrequencyAnalysisError,
     analyze_number_frequency,
@@ -23,6 +23,7 @@ from lotto_analyzer.analysis.scoring import (
     score_rows,
 )
 from lotto_analyzer.collector import LottoCrawler, LottoCrawlerError
+from lotto_analyzer.collector.crawler import require_current_history
 from lotto_analyzer.collector.local_loader import LocalDataLoadError, load_draws_from_excel
 from lotto_analyzer.config import DEFAULT_LOCAL_EXCEL_PATH, ensure_project_directories
 from lotto_analyzer.database import LottoDatabaseError, LottoDatabaseManager
@@ -32,7 +33,7 @@ from lotto_analyzer.generator import (
     CombinationGenerationError,
     generate_combinations,
 )
-from lotto_analyzer.analysis.evaluation import RecommendationRecord
+from lotto_analyzer.generator.combination import DEFAULT_RECOMMENDATION_COUNT, generate_from_history
 from lotto_analyzer.report import (
     ChartExportError,
     ExcelExportError,
@@ -146,6 +147,13 @@ def build_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument("start_draw", type=int, help="First target draw number")
     backtest_parser.add_argument("end_draw", type=int, help="Last target draw number")
     backtest_parser.add_argument("--strategy", default="Hybrid", help="Generation strategy")
+    backtest_parser.add_argument("--count", type=int, default=DEFAULT_RECOMMENDATION_COUNT)
+    backtest_parser.add_argument("--sum-min", type=int, default=100, help="Minimum combination sum")
+    backtest_parser.add_argument("--sum-max", type=int, default=180, help="Maximum combination sum")
+    backtest_parser.add_argument("--exclude-latest", action=argparse.BooleanOptionalAction, default=True,
+                                 help="Exclude latest draw numbers (default: enabled)")
+    backtest_parser.add_argument("--seed", type=int, default=20240617)
+    backtest_parser.add_argument("--baseline-repeats", type=int, default=20)
 
     subparsers.add_parser("export-charts", help="Export MVP charts as PNG files")
     subparsers.add_parser("export-report", help="Export the Excel report")
@@ -246,18 +254,11 @@ def run_command(args: argparse.Namespace) -> int:
 
     if args.command == "recommend":
         draws = _require_draws(database)
+        require_current_history(draws)
         combinations = _generate_from_draws(draws, args)
         target_draw_no = draws[-1].draw_no + 1
-        records = [
-            RecommendationRecord(
-                recommendation_id=_recommendation_id(target_draw_no, args.strategy, index),
-                target_draw_no=target_draw_no,
-                created_date=date.today(),
-                combination=combination,
-            )
-            for index, combination in enumerate(combinations, start=1)
-        ]
-        database.save_recommendations(records)
+        records = make_recommendation_batch(target_draw_no, combinations)
+        database.replace_recommendations(records)
         print(json.dumps([record.to_dict() for record in records], ensure_ascii=False, indent=2))
         return 0
 
@@ -268,7 +269,7 @@ def run_command(args: argparse.Namespace) -> int:
         actual_draw = database.get_draw(target_draw_no)
         if actual_draw is None:
             raise LottoDatabaseError(f"Draw {target_draw_no} is not stored.")
-        records = database.list_recommendations(target_draw_no)
+        records = database.list_recommendations(target_draw_no, include_archived=True)
         if not records:
             raise LottoDatabaseError(f"No recommendations found for draw {target_draw_no}.")
         evaluations = [evaluate_recommendation(record, actual_draw) for record in records]
@@ -278,7 +279,11 @@ def run_command(args: argparse.Namespace) -> int:
 
     if args.command == "backtest":
         draws = _require_draws(database)
-        summary = run_backtest(draws, args.start_draw, args.end_draw, strategy=args.strategy)
+        summary = run_backtest(
+            draws, args.start_draw, args.end_draw, strategy=args.strategy,
+            constraints=_constraints_from_args(args),
+            count=args.count, seed=args.seed, baseline_repeats=args.baseline_repeats,
+        )
         print(
             json.dumps(
                 {"summary": summary.to_dict(), "rounds": [item.to_dict() for item in summary.rounds]},
@@ -345,7 +350,8 @@ def _add_generation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", default="Hybrid", help="Random, Balanced, Hot Mix, Cold Mix, Hybrid")
     parser.add_argument("--sum-min", type=int, default=100, help="Minimum combination sum")
     parser.add_argument("--sum-max", type=int, default=180, help="Maximum combination sum")
-    parser.add_argument("--exclude-latest", action="store_true", help="Exclude latest draw numbers")
+    parser.add_argument("--exclude-latest", action=argparse.BooleanOptionalAction, default=True,
+                        help="Exclude latest draw numbers (default: enabled)")
 
 
 def _require_draws(database: LottoDatabaseManager) -> list[LottoDraw]:
@@ -367,14 +373,11 @@ def _constraints_from_args(args: argparse.Namespace) -> CombinationConstraints:
 
 def _generate_from_draws(draws: list[LottoDraw], args: argparse.Namespace):
     """Calculate scores and generate combinations from stored draws."""
-    scores = calculate_number_scores(draws)
-    return generate_combinations(
-        scores,
-        latest_draw=draws[-1],
+    return generate_from_history(
+        draws,
         constraints=_constraints_from_args(args),
         strategy=args.strategy,
         count=args.count,
-        excluded_combinations=[draw.numbers for draw in draws],
     )
 
 

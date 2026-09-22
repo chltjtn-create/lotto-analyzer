@@ -52,6 +52,8 @@ python -m lotto_analyzer.main generate-combinations --count 5 --strategy Hybrid
 python -m lotto_analyzer.main recommend --count 5 --strategy Hybrid
 python -m lotto_analyzer.main evaluate-recommendations 1150
 python -m lotto_analyzer.main backtest 1000 1010 --strategy Hybrid
+python -m lotto_analyzer.main backtest 1000 1010 --strategy Hybrid --count 5 --seed 20240617 --baseline-repeats 20
+python -m lotto_analyzer.main backtest 1000 1010 --sum-min 120 --sum-max 150 --no-exclude-latest
 python -m lotto_analyzer.main export-charts
 python -m lotto_analyzer.main export-report
 ```
@@ -61,6 +63,16 @@ python -m lotto_analyzer.main export-report
 통계 분석 명령은 SQLite에 저장된 회차 데이터를 기준으로 실행됩니다. 먼저 `save-draw` 또는 `save-range`로 데이터를 저장해야 합니다.
 
 추천 평가 명령은 추천 대상 회차의 실제 당첨 결과가 DB에 저장된 뒤 실행해야 합니다.
+
+## 데이터와 평가 신뢰성
+
+- 수집 응답의 회차와 추첨일을 검증하며, 최신 회차 수집에 실패하면 새 추천 저장을 중단합니다.
+- 추천을 다시 생성하면 같은 회차·전략의 이전 묶음을 보관하고 새 묶음만 활성화합니다. 기존 번호는 덮어쓰지 않습니다.
+- 당첨번호를 정정하면 연결된 평가를 재계산합니다. 보관된 추천도 자동 평가 대상이며 화면에서 확인할 수 있습니다.
+- 기본 추천과 백테스트는 같은 생성 함수·제외 조건·회차당 5게임을 사용합니다. 사용자 지정 조건도 맞춰 비교해야 합니다.
+- 백테스트는 회차당 같은 게임 수의 무제약 균등 무작위 기준선, 게임당 평균 적중, 회차별 최고 적중 평균을 구분해 표시합니다.
+- 비교 구간은 회차별 차이의 근사 구간입니다. 여러 전략을 시험한 영향이나 별도 최종 평가 기간까지 보정하지 않으므로 예측력 향상을 입증하는 수치로 해석하면 안 됩니다.
+- 현재 분석은 규칙 기반입니다. 머신러닝이나 자동 모델 교체는 구현되어 있지 않습니다.
 
 ## 테스트 방법
 

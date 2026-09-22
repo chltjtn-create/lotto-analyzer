@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from uuid import uuid4
 
 from lotto_analyzer.domain.models import LottoDraw
 from lotto_analyzer.generator.combination import GeneratedCombination
@@ -17,6 +18,7 @@ class RecommendationRecord:
     target_draw_no: int
     created_date: date
     combination: GeneratedCombination
+    is_active: bool = True
 
     def to_dict(self) -> dict[str, object]:
         """Convert the recommendation record to a report-friendly dictionary."""
@@ -24,9 +26,28 @@ class RecommendationRecord:
             "recommendation_id": self.recommendation_id,
             "target_draw_no": self.target_draw_no,
             "created_date": self.created_date.isoformat(),
+            "is_active": self.is_active,
         }
         row.update(self.combination.to_dict())
         return row
+
+
+def make_recommendation_batch(
+    target_draw_no: int,
+    combinations: list[GeneratedCombination],
+    created_date: date | None = None,
+) -> list[RecommendationRecord]:
+    """Give each generation a new identity so previous forecasts remain intact."""
+    batch_id = uuid4().hex
+    return [
+        RecommendationRecord(
+            f"{target_draw_no}-{combo.strategy.lower().replace(' ', '_')}-{batch_id}-{index:03d}",
+            target_draw_no,
+            created_date or date.today(),
+            combo,
+        )
+        for index, combo in enumerate(combinations, 1)
+    ]
 
 
 @dataclass(frozen=True, slots=True)
